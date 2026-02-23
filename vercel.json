@@ -1,0 +1,6 @@
+{
+  "buildCommand": "npm run build",
+  "env": {
+    "NEXT_PUBLIC_CONVEX_URL": "https://sensible-panda-662.convex.cloud"
+  }
+}
