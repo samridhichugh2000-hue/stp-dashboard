@@ -54,10 +54,7 @@ export default function NRDPage() {
           <h1 className="text-2xl font-bold text-gray-900">Net Revenue (NRD)</h1>
           <p className="text-sm text-gray-500 mt-0.5">Monthly NR performance tracking</p>
         </div>
-        <div className="flex items-center gap-3">
-          <NJFilter value={njId} onChange={setNjId} />
-          <ExportButton />
-        </div>
+        <ExportButton />
       </div>
 
       {/* Stat cards */}
@@ -83,9 +80,12 @@ export default function NRDPage() {
 
       {/* NR Trend Chart */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">
-          NR Trend — {njId === "all" ? "First NJ" : njs?.find((n: Doc<"newJoiners">) => n._id === njId)?.name}
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-gray-700">
+            NR Trend — {njId === "all" ? "First NJ" : njs?.find((n: Doc<"newJoiners">) => n._id === njId)?.name}
+          </h2>
+          <NJFilter value={njId} onChange={setNjId} />
+        </div>
         {singleNR
           ? <NRTrendChart records={singleNR} />
           : <div className="animate-pulse h-48 bg-gray-50 rounded-xl" />}
