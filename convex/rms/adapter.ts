@@ -7,6 +7,7 @@ export interface NJRecord {
   empId: string;
   name: string;
   department: string;
+  designation?: string;
   managerName: string;
   location: string;
   email: string;

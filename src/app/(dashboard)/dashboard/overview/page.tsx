@@ -159,7 +159,7 @@ export default function OverviewPage() {
                 {/* Detail fields grid */}
                 <div className="grid grid-cols-2 gap-x-10 gap-y-5">
                   <DetailField label="Department"  value={selected.department} />
-                  <DetailField label="Designation" value={null} />
+                  <DetailField label="Designation" value={selected.designation} />
                   <DetailField label="Manager"     value={selected.managerId} />
                   <DetailField label="Email ID"    value={selected.email} />
                   <DetailField label="Location"    value={selected.location} />
