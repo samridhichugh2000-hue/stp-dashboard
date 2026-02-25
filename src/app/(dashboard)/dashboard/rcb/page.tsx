@@ -20,12 +20,20 @@ function fmtAxisINR(v: number): string {
   return `${sign}${abs}`;
 }
 
-const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: { fullName: string; value: number } }[] }) => {
+function fmtTenure(months: number): string {
+  if (months < 1) return "< 1 mo";
+  if (months < 12) return `${months} mo`;
+  const yr = Math.floor(months / 12);
+  const mo = months % 12;
+  return mo > 0 ? `${yr} yr ${mo} mo` : `${yr} yr`;
+}
+
+const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: { name: string; value: number } }[] }) => {
   if (!active || !payload?.length) return null;
-  const { fullName, value } = payload[0].payload;
+  const { name, value } = payload[0].payload;
   return (
     <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-lg text-xs">
-      <p className="font-semibold text-gray-800 mb-1">{fullName}</p>
+      <p className="font-semibold text-gray-800 mb-1">{name}</p>
       <p className="text-gray-500">NR from Corporates</p>
       <p className={`text-base font-bold tabular-nums ${value >= 0 ? "text-indigo-600" : "text-red-600"}`}>
         {fmtINR(value)}
@@ -41,14 +49,13 @@ export default function RCBPage() {
 
   const totalClaimed = rows.reduce((s, r) => s + (r.claimedCorporates ?? 0), 0);
   const totalNR = rows.reduce((s, r) => s + (r.nrFromCorporates ?? 0), 0);
-  const csmsWithData = rows.filter(r => r.claimedCorporates != null || r.nrFromCorporates != null).length;
+  const csmsWithData = rows.filter(r => (r.claimedCorporates ?? 0) > 0).length;
 
-  // Chart: only CSMs with nrFromCorporates data, sorted desc (already sorted by query)
+  // Chart: only CSMs with claimedCorporates > 0, sorted desc
   const chartData = rows
-    .filter(r => r.nrFromCorporates != null)
+    .filter(r => (r.claimedCorporates ?? 0) > 0 && r.nrFromCorporates != null)
     .map(r => ({
       name: r.name,
-      // Short label for Y-axis
       label: r.name.split(" ").map((w, i) => i === 0 ? w : w[0] + ".").join(" "),
       value: r.nrFromCorporates!,
     }));
@@ -59,14 +66,14 @@ export default function RCBPage() {
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">RCB — Corporate Performance</h1>
+        <h1 className="text-2xl font-bold text-gray-900">RCB - Regular Corporate Business</h1>
         <p className="text-sm text-gray-500 mt-0.5">Claimed Corporates &amp; NR from Corporates per CSM</p>
       </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-4 stagger">
         <div className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl p-5 text-white shadow-lg card-hover">
-          <div className="text-xs font-medium text-white/70 mb-2">CSMs with Corporate Data</div>
+          <div className="text-xs font-medium text-white/70 mb-2">CSMs with Corporate Claims</div>
           <div className="text-4xl font-black">{csmsWithData}</div>
           <div className="text-xs text-white/60 mt-1">Active CSMs</div>
         </div>
@@ -82,11 +89,50 @@ export default function RCBPage() {
         </div>
       </div>
 
-      {/* Horizontal bar chart */}
+      {/* Table */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">CSM Corporate Breakdown</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b-2 border-gray-100 bg-gray-50/60">
+                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-400 w-8">#</th>
+                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-400">CSM Name</th>
+                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-400">Tenure</th>
+                <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-400">Claimed Corporates</th>
+                <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-400">NR from Corporates</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {rows.map((row, i) => (
+                <tr key={row._id} className="hover:bg-indigo-50/30 transition-colors group">
+                  <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
+                  <td className="py-2.5 px-3 text-xs font-semibold text-gray-800 group-hover:text-gray-900">
+                    {row.name}
+                  </td>
+                  <td className="py-2.5 px-3 text-xs text-gray-500">{fmtTenure(row.tenureMonths)}</td>
+                  <td className="py-2.5 px-3 text-right text-xs font-bold text-gray-800 tabular-nums">
+                    {row.claimedCorporates != null
+                      ? row.claimedCorporates
+                      : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="py-2.5 px-3 text-right text-sm font-bold tabular-nums text-gray-900">
+                    {row.nrFromCorporates != null
+                      ? fmtINR(row.nrFromCorporates)
+                      : <span className="text-gray-300">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Horizontal bar chart — below the table, excludes 0-claimed CSMs */}
       {chartData.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-0.5">NR from Corporates — by CSM</h2>
-          <p className="text-xs text-gray-400 mb-4">Sorted by corporate NR (highest first) · Hover for exact values</p>
+          <p className="text-xs text-gray-400 mb-4">Only CSMs with claimed corporates · Sorted highest first · Hover for exact values</p>
           <div style={{ height: chartHeight }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
@@ -127,45 +173,6 @@ export default function RCBPage() {
           </div>
         </div>
       )}
-
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">CSM Corporate Breakdown</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b-2 border-gray-100 bg-gray-50/60">
-                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-400 w-8">#</th>
-                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-400">CSM Name</th>
-                <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-400">Location</th>
-                <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-400">Claimed Corporates</th>
-                <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-400">NR from Corporates</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {rows.map((row, i) => (
-                <tr key={row._id} className="hover:bg-indigo-50/30 transition-colors group">
-                  <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
-                  <td className="py-2.5 px-3 text-xs font-semibold text-gray-800 group-hover:text-gray-900">
-                    {row.name}
-                  </td>
-                  <td className="py-2.5 px-3 text-xs text-gray-400">{row.location}</td>
-                  <td className="py-2.5 px-3 text-right text-xs font-bold text-gray-800 tabular-nums">
-                    {row.claimedCorporates != null
-                      ? row.claimedCorporates
-                      : <span className="text-gray-300">—</span>}
-                  </td>
-                  <td className="py-2.5 px-3 text-right text-sm font-bold tabular-nums text-gray-900">
-                    {row.nrFromCorporates != null
-                      ? fmtINR(row.nrFromCorporates)
-                      : <span className="text-gray-300">—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }
