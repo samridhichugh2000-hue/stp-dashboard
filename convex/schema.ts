@@ -5,10 +5,12 @@ export default defineSchema({
   // New Joiners master table
   newJoiners: defineTable({
     name: v.string(),
-    empId: v.optional(v.string()),       // Google Sheets employee ID
-    department: v.optional(v.string()),  // e.g. "Sales"
-    location: v.optional(v.string()),    // Base location
-    email: v.optional(v.string()),       // Work email
+    empId: v.optional(v.string()),              // Google Sheets employee ID
+    department: v.optional(v.string()),         // e.g. "Sales"
+    location: v.optional(v.string()),           // Base location
+    email: v.optional(v.string()),              // Work email
+    claimedCorporates: v.optional(v.number()), // Count from "Claimed" column
+    nrFromCorporates: v.optional(v.number()),  // Value from "NR from Corporates" column
     joinDate: v.string(), // ISO date string
     managerId: v.string(),
     currentPhase: v.union(

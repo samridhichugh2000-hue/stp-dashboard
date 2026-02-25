@@ -164,8 +164,10 @@ export class GoogleSheetsRMSClient implements RMSClient {
   async fetchNewJoiners(): Promise<NJRecord[]> {
     const { headers, dataRows } = await this.fetchRows();
 
-    // Locate the "Status" column (for category derivation)
-    const statusIdx = headers.findIndex((h) => h.toLowerCase().trim() === "status");
+    // Locate special columns by header name
+    const statusIdx   = headers.findIndex((h) => h.toLowerCase().trim() === "status");
+    const claimedIdx  = headers.findIndex((h) => h.toLowerCase().trim() === "claimed");
+    const nrCorpIdx   = headers.findIndex((h) => h.toLowerCase().includes("nr from corp"));
 
     const results: NJRecord[] = [];
     for (const row of dataRows) {
@@ -173,6 +175,9 @@ export class GoogleSheetsRMSClient implements RMSClient {
       const name = row[1]?.trim();
       // Skip rows without a numeric emp ID (handles extra header rows in the sheet)
       if (!empId || !name || !/^\d+$/.test(empId)) continue;
+
+      const claimedRaw = claimedIdx >= 0 ? parseNRValue(row[claimedIdx] ?? "") : null;
+      const nrCorpRaw  = nrCorpIdx  >= 0 ? parseNRValue(row[nrCorpIdx]  ?? "") : null;
 
       results.push({
         empId,
@@ -183,6 +188,8 @@ export class GoogleSheetsRMSClient implements RMSClient {
         joinDate: parseDOJ(row[5]?.trim() || ""),
         email: row[6]?.trim() || "",
         status: statusIdx >= 0 ? (row[statusIdx]?.trim() || "") : "",
+        claimedCorporates: claimedRaw !== null ? claimedRaw : undefined,
+        nrFromCorporates:  nrCorpRaw  !== null ? nrCorpRaw  : undefined,
       });
     }
     return results;

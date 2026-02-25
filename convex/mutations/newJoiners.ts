@@ -28,6 +28,8 @@ export const upsertNewJoiner = internalMutation({
       v.literal("Non-Performer"),
       v.literal("Uncategorised")
     ),
+    claimedCorporates: v.optional(v.number()),
+    nrFromCorporates: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -47,6 +49,8 @@ export const upsertNewJoiner = internalMutation({
       currentPhase: args.currentPhase,
       category: args.category,
       isActive: true,
+      claimedCorporates: args.claimedCorporates,
+      nrFromCorporates: args.nrFromCorporates,
     };
 
     if (existing) {
