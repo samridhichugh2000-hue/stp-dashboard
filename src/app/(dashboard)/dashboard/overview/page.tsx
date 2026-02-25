@@ -4,180 +4,194 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Doc, Id } from "@/../convex/_generated/dataModel";
+import { NJCard } from "@/components/panels/overview/NJCard";
 import { HuddleLog } from "@/components/panels/overview/HuddleLog";
-import { Users, UserCheck, UserX } from "lucide-react";
-import { clsx } from "clsx";
-
-const MONTHS_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-function fmtDOJ(iso: string): string {
-  const d = new Date(iso + "T00:00:00");
-  return `${String(d.getDate()).padStart(2, "0")} ${MONTHS_ABBR[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-function getInitials(name: string) {
-  return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
-}
-
-const AVATAR_GRADIENTS = [
-  "from-indigo-400 to-violet-500",
-  "from-sky-400 to-blue-500",
-  "from-emerald-400 to-teal-500",
-  "from-amber-400 to-orange-500",
-  "from-pink-400 to-rose-500",
-];
-
-function getGradient(name: string) {
-  return AVATAR_GRADIENTS[name.charCodeAt(0) % AVATAR_GRADIENTS.length];
-}
-
-function DetailField({ label, value }: { label: string; value?: string | number | null }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">{label}</span>
-      {value != null && value !== "" ? (
-        <span className="text-sm text-gray-800 font-medium">{value}</span>
-      ) : (
-        <span className="text-sm text-gray-300">—</span>
-      )}
-    </div>
-  );
-}
+import { DayTaskTracker } from "@/components/panels/overview/DayTaskTracker";
+import { ExportButton } from "@/components/shared/ExportButton";
+import { StatCard } from "@/components/shared/StatCard";
+import { Users, AlertTriangle, BarChart2, Clock } from "lucide-react";
 
 export default function OverviewPage() {
-  const [selectedId, setSelectedId] = useState<Id<"newJoiners"> | null>(null);
+  const [selectedNJ, setSelectedNJ] = useState<Id<"newJoiners"> | null>(null);
+  const njs = useQuery(api.queries.newJoiners.list, {});
+  const alerts = useQuery(api.queries.performance.pendingAlerts);
+  const summary = useQuery(api.queries.performance.dashboardSummary);
 
-  const allNjs   = useQuery(api.queries.newJoiners.list, { includeInactive: true });
-  const activeNjs = useQuery(api.queries.newJoiners.list, {});
-
-  if (!allNjs || !activeNjs) {
+  // Loading skeleton
+  if (!njs || !summary) {
     return (
       <div className="space-y-6 animate-fade-in">
-        <div className="grid grid-cols-3 gap-4">
-          {[...Array(3)].map((_, i) => <div key={i} className="shimmer h-28 rounded-2xl" />)}
+        {/* Stat card skeletons */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="shimmer h-32 rounded-2xl" />
+          ))}
         </div>
+        {/* List skeletons */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="space-y-2">
-            {[...Array(6)].map((_, i) => <div key={i} className="shimmer h-11 rounded-xl" />)}
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="shimmer h-24 rounded-xl" />
+            ))}
           </div>
-          <div className="lg:col-span-2 shimmer h-64 rounded-2xl" />
+          <div className="lg:col-span-2 shimmer h-80 rounded-xl" />
         </div>
       </div>
     );
   }
 
-  const totalNJs  = allNjs.length;
-  const stpActive = allNjs.filter((n: Doc<"newJoiners">) => n.isActive).length;
-  const stpClosed = allNjs.filter((n: Doc<"newJoiners">) => !n.isActive).length;
-
-  const selected = selectedId
-    ? allNjs.find((n: Doc<"newJoiners">) => n._id === selectedId) ?? null
-    : null;
-
-  const statCards = [
-    { label: "Total NJs",   value: totalNJs,  icon: <Users size={20} />,      gradient: "from-indigo-500 to-violet-600" },
-    { label: "STP Active",  value: stpActive, icon: <UserCheck size={20} />,  gradient: "from-emerald-500 to-teal-600" },
-    { label: "STP Closed",  value: stpClosed, icon: <UserX size={20} />,      gradient: "from-rose-500 to-red-600" },
-  ];
-
-  const sortedActive = [...activeNjs].sort((a: Doc<"newJoiners">, b: Doc<"newJoiners">) =>
-    a.name.localeCompare(b.name)
-  );
+  const activeNJ = njs.filter((n: Doc<"newJoiners">) => n.isActive);
+  const displayNJ = selectedNJ ? njs.find((n: Doc<"newJoiners">) => n._id === selectedNJ) : null;
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Overview</h1>
-        <p className="text-sm text-gray-500 mt-0.5">New Joiner programme at a glance</p>
+      {/* Page header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">NJ Overview</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Monitor your new joiner pipeline in real time
+          </p>
+        </div>
+        <ExportButton />
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4">
-        {statCards.map((c) => (
-          <div key={c.label} className={`bg-gradient-to-br ${c.gradient} rounded-2xl p-5 text-white shadow-lg card-hover`}>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">{c.label}</span>
-              <span className="opacity-50">{c.icon}</span>
-            </div>
-            <div className="text-5xl font-black">{c.value}</div>
-          </div>
-        ))}
+      {/* ── KPI Stat Cards ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
+        <StatCard
+          label="Active NJs"
+          value={summary.activeNJs}
+          subtitle="Currently enrolled"
+          icon={<Users size={20} />}
+          gradient="from-indigo-500 to-violet-600"
+          trend={{ value: 12, label: "vs last month" }}
+          animationDelay={0}
+        />
+        <StatCard
+          label="Pending Alerts"
+          value={summary.pendingAlerts}
+          subtitle="Need acknowledgement"
+          icon={<AlertTriangle size={20} />}
+          gradient="from-rose-500 to-red-600"
+          trend={{ value: -5, label: "vs last week" }}
+          animationDelay={60}
+        />
+        <StatCard
+          label="Avg Qubit Score"
+          value={summary.avgQubitScore}
+          suffix="/100"
+          subtitle="Call quality average"
+          icon={<BarChart2 size={20} />}
+          gradient="from-emerald-500 to-teal-600"
+          trend={{ value: 8, label: "vs last week" }}
+          animationDelay={120}
+        />
+        <StatCard
+          label="Total Leads"
+          value={summary.totalLeads}
+          subtitle={`${summary.tatBreached} TAT breached`}
+          icon={<Clock size={20} />}
+          gradient="from-amber-500 to-orange-600"
+          trend={{ value: 3, label: "vs yesterday" }}
+          animationDelay={180}
+        />
       </div>
 
-      {/* NJ list + detail panel */}
+      {/* ── Phase distribution bar ──────────────────────────────────────── */}
+      <div className="animate-slide-up bg-white rounded-2xl border border-gray-100 p-5 shadow-sm" style={{ animationDelay: "240ms" }}>
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Phase Distribution</p>
+        <div className="flex items-center gap-3">
+          {(["Orientation", "Training", "Field", "Graduated"] as const).map((phase, idx) => {
+            const count = summary.byPhase[phase] ?? 0;
+            const pct = summary.activeNJs > 0 ? Math.round((count / summary.activeNJs) * 100) : 0;
+            const colors = [
+              "from-purple-400 to-purple-500",
+              "from-sky-400 to-sky-500",
+              "from-emerald-400 to-emerald-500",
+              "from-gray-300 to-gray-400",
+            ];
+            const textColors = ["text-purple-700", "text-sky-700", "text-emerald-700", "text-gray-600"];
+            const bgColors = ["bg-purple-50", "bg-sky-50", "bg-emerald-50", "bg-gray-50"];
+            return (
+              <div key={phase} className="flex-1">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className={`text-xs font-medium ${textColors[idx]}`}>{phase}</span>
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${bgColors[idx]} ${textColors[idx]}`}>{count}</span>
+                </div>
+                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full bg-gradient-to-r ${colors[idx]} bar-fill`}
+                    style={{ "--bar-width": `${pct}%` } as React.CSSProperties}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── NJ List + Detail panel ──────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* Left: name list */}
+        {/* NJ cards list */}
         <div className="lg:col-span-1">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">New Joiners</h2>
-            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{activeNjs.length}</span>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{activeNJ.length}</span>
           </div>
-          <div className="space-y-1.5">
-            {sortedActive.map((nj: Doc<"newJoiners">) => (
-              <button
-                key={nj._id}
-                onClick={() => setSelectedId(selectedId === nj._id ? null : nj._id)}
-                className={clsx(
-                  "w-full text-left px-4 py-2.5 rounded-xl border text-sm font-medium transition-all duration-150",
-                  selectedId === nj._id
-                    ? "bg-indigo-600 text-white border-indigo-600 shadow-md"
-                    : "bg-white text-gray-700 border-gray-200 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700"
-                )}
-              >
-                {nj.name}
-              </button>
-            ))}
+          <div className="space-y-2 stagger">
+            {activeNJ.map((nj: Doc<"newJoiners">) => {
+              const njAlerts = alerts?.filter((a: Doc<"performanceAlerts">) => a.njId === nj._id) ?? [];
+              return (
+                <NJCard
+                  key={nj._id}
+                  nj={nj}
+                  alerts={njAlerts}
+                  selected={selectedNJ === nj._id}
+                  onClick={() => setSelectedNJ(selectedNJ === nj._id ? null : nj._id)}
+                />
+              );
+            })}
           </div>
         </div>
 
-        {/* Right: detail panel */}
+        {/* Detail panel */}
         <div className="lg:col-span-2">
-          {selected ? (
+          {selectedNJ && displayNJ ? (
             <div className="space-y-4 animate-scale-in">
-
-              {/* Profile card */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                {/* Avatar + bold name */}
-                <div className="flex items-center gap-4 mb-6 pb-5 border-b border-gray-100">
-                  <div className={clsx(
-                    "w-14 h-14 rounded-2xl bg-gradient-to-br flex items-center justify-center text-white text-lg font-bold shadow-sm flex-shrink-0",
-                    getGradient(selected.name)
-                  )}>
-                    {getInitials(selected.name)}
+              {/* NJ header card */}
+              <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-2xl p-5 text-white shadow-lg">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-lg font-bold">
+                    {displayNJ.name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
                   </div>
                   <div>
-                    <h2 className="text-xl font-black text-gray-900">{selected.name}</h2>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      Joined {fmtDOJ(selected.joinDate)} · {selected.tenureMonths} month{selected.tenureMonths !== 1 ? "s" : ""}
+                    <h3 className="text-lg font-bold">{displayNJ.name}</h3>
+                    <p className="text-indigo-200 text-sm">
+                      Joined {new Date(displayNJ.joinDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      · {displayNJ.tenureMonths} months tenure
                     </p>
                   </div>
-                </div>
-
-                {/* Detail fields grid — order: Department, Designation, Manager, Email ID, Emp ID, Location */}
-                <div className="grid grid-cols-2 gap-x-10 gap-y-5">
-                  <DetailField label="Department"  value={selected.department} />
-                  <DetailField label="Designation" value={(selected as Record<string, unknown>).designation as string | undefined} />
-                  <DetailField label="Manager"     value={selected.managerId} />
-                  <DetailField label="Email ID"    value={selected.email} />
-                  <DetailField label="Emp ID"      value={selected.empId} />
-                  <DetailField label="Location"    value={selected.location} />
+                  <div className="ml-auto flex gap-2">
+                    <span className="px-3 py-1 rounded-full bg-white/20 text-xs font-semibold">{displayNJ.currentPhase}</span>
+                    <span className="px-3 py-1 rounded-full bg-white/20 text-xs font-semibold">{displayNJ.category}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Huddle log */}
               <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-                <HuddleLog njId={selectedId!} />
+                <DayTaskTracker />
+              </div>
+              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                <HuddleLog njId={selectedNJ} />
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center h-64 bg-white rounded-2xl border border-dashed border-gray-200 text-center p-8">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
-                <Users size={26} className="text-indigo-400" />
+            <div className="flex flex-col items-center justify-center h-80 bg-white rounded-2xl border border-dashed border-gray-200 text-center p-8">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
+                <Users size={28} className="text-indigo-400" />
               </div>
               <p className="text-gray-700 font-semibold">Select a New Joiner</p>
-              <p className="text-sm text-gray-400 mt-1">Click a name on the left to view their details.</p>
+              <p className="text-sm text-gray-400 mt-1">Click any card on the left to view their details, tasks and huddle logs.</p>
             </div>
           )}
         </div>
