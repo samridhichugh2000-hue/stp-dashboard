@@ -49,23 +49,30 @@ interface RawApiRow {
 }
 
 interface FlatRow {
-  cce:      string;
-  leads:    number;
-  roi:      number;
-  fromDate: string;
-  toDate:   string;
+  cce:          string;
+  leads:        number;
+  registration: number | null;  // not returned by GetROIData — ready for future API
+  roi:          number;
+  fromDate:     string;
+  toDate:       string;
 }
 
 function flattenRow(r: RawApiRow): FlatRow {
   const cce = r.DisplayColumns?.CCE
     ?? (typeof r.CCE === "string" ? r.CCE : "")
     ?? String(Object.values(r.DisplayColumns ?? {})[0] ?? "Unknown");
+
+  // Try common registration field names in case a future API adds them
+  const regVal =
+    r.Registration ?? r.Registrations ?? r.Reg ?? r.Registered ?? null;
+
   return {
-    cce:      String(cce).trim(),
-    leads:    Number(r.Leads  ?? 0),
-    roi:      Number(r.ROI    ?? 0),
-    fromDate: String(r.FromDate ?? ""),
-    toDate:   String(r.ToDate   ?? ""),
+    cce:          String(cce).trim(),
+    leads:        Number(r.Leads  ?? 0),
+    registration: regVal !== null ? Number(regVal) : null,
+    roi:          Number(r.ROI    ?? 0),
+    fromDate:     String(r.FromDate ?? ""),
+    toDate:       String(r.ToDate   ?? ""),
   };
 }
 
@@ -304,6 +311,8 @@ export default function LeadsPage() {
                       <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 w-8">#</th>
                       <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500">CSM Name</th>
                       <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500">Leads Allocated</th>
+                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500">Registration</th>
+                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500">Conversion Rate</th>
                       <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500">ROI</th>
                       <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">ROI Status</th>
                     </tr>
@@ -319,6 +328,16 @@ export default function LeadsPage() {
                           </td>
                           <td className="py-2.5 px-3 text-right text-xs font-semibold text-indigo-600 tabular-nums">
                             {row.leads}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-xs font-semibold text-gray-600 tabular-nums">
+                            {row.registration !== null
+                              ? row.registration
+                              : <span className="text-gray-300 font-normal">—</span>}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-xs font-semibold text-amber-600 tabular-nums">
+                            {row.registration !== null && row.leads > 0
+                              ? `${((row.registration / row.leads) * 100).toFixed(1)}%`
+                              : <span className="text-gray-300 font-normal">—</span>}
                           </td>
                           <td className={clsx(
                             "py-2.5 px-3 text-right text-sm font-bold tabular-nums",
