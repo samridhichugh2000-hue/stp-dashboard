@@ -10,6 +10,7 @@
 
 import type * as actions_evaluateCategories from "../actions/evaluateCategories.js";
 import type * as actions_evaluateMilestones from "../actions/evaluateMilestones.js";
+import type * as actions_koenigApi from "../actions/koenigApi.js";
 import type * as actions_purgeNonSheetData from "../actions/purgeNonSheetData.js";
 import type * as actions_syncGoogleSheets from "../actions/syncGoogleSheets.js";
 import type * as actions_syncLeads from "../actions/syncLeads.js";
@@ -57,6 +58,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   "actions/evaluateCategories": typeof actions_evaluateCategories;
   "actions/evaluateMilestones": typeof actions_evaluateMilestones;
+  "actions/koenigApi": typeof actions_koenigApi;
   "actions/purgeNonSheetData": typeof actions_purgeNonSheetData;
   "actions/syncGoogleSheets": typeof actions_syncGoogleSheets;
   "actions/syncLeads": typeof actions_syncLeads;
