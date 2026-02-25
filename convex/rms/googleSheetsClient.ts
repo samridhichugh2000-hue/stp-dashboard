@@ -166,7 +166,7 @@ export class GoogleSheetsRMSClient implements RMSClient {
 
     // Locate special columns by header name
     const statusIdx   = headers.findIndex((h) => h.toLowerCase().trim() === "status");
-    const claimedIdx  = headers.findIndex((h) => h.toLowerCase().trim() === "claimed");
+    const claimedIdx  = headers.findIndex((h) => h.toLowerCase().trim().startsWith("claimed"));
     const nrCorpIdx   = headers.findIndex((h) => h.toLowerCase().includes("nr from corp"));
 
     const results: NJRecord[] = [];
