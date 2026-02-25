@@ -9,6 +9,14 @@ function fmtNumber(v: number): string {
   return `${sign}${Math.abs(v).toLocaleString("en-IN")}`;
 }
 
+function fmtTenure(months: number): string {
+  if (months < 1) return "< 1 mo";
+  if (months < 12) return `${months} mo`;
+  const yr = Math.floor(months / 12);
+  const mo = months % 12;
+  return mo > 0 ? `${yr} yr ${mo} mo` : `${yr} yr`;
+}
+
 function colorOf(v: number): "Positive" | "Negative" | "Zero" {
   if (v > 0) return "Positive";
   if (v < 0) return "Negative";
@@ -115,7 +123,7 @@ export default function ROIPage() {
               <tr className="border-b-2 border-gray-100">
                 <th className="text-left py-2 px-3 text-xs font-semibold text-gray-400 w-8">#</th>
                 <th className="text-left py-2 px-3 text-xs font-semibold text-gray-400">CSM Name</th>
-                <th className="text-left py-2 px-3 text-xs font-semibold text-gray-400">Location</th>
+                <th className="text-left py-2 px-3 text-xs font-semibold text-gray-400">Tenure</th>
                 <th className="text-right py-2 px-3 text-xs font-semibold text-gray-400">Current ROI</th>
               </tr>
             </thead>
@@ -126,7 +134,7 @@ export default function ROIPage() {
                     <tr key={row._id} className="hover:bg-gray-50 transition-colors">
                       <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
                       <td className="py-2.5 px-3 text-xs font-medium text-gray-600">{row.name}</td>
-                      <td className="py-2.5 px-3 text-xs text-gray-400">{row.location}</td>
+                      <td className="py-2.5 px-3 text-xs text-gray-400">{fmtTenure(row.tenureMonths)}</td>
                       <td className="py-2.5 px-3 text-right text-xs text-gray-300">—</td>
                     </tr>
                   );
@@ -136,7 +144,7 @@ export default function ROIPage() {
                   <tr key={row._id} className="hover:bg-gray-50 transition-colors group">
                     <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
                     <td className="py-2.5 px-3 text-xs font-semibold text-gray-800 group-hover:text-gray-900">{row.name}</td>
-                    <td className="py-2.5 px-3 text-xs text-gray-400">{row.location}</td>
+                    <td className="py-2.5 px-3 text-xs text-gray-400">{fmtTenure(row.tenureMonths)}</td>
                     <td className={`py-2.5 px-3 text-right text-sm font-bold tabular-nums ${NUM_COLOR[code]}`}>
                       {fmtNumber(row.totalNR)}
                     </td>

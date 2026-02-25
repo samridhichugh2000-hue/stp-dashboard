@@ -25,7 +25,7 @@ export const currentROISummary = query({
       .map((nj) => ({
         _id: nj._id,
         name: nj.name,
-        location: nj.location ?? "",
+        tenureMonths: nj.tenureMonths,
         totalNR: totals.has(nj._id) ? totals.get(nj._id)! : null,
       }));
   },
