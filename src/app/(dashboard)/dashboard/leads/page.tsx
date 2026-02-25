@@ -4,74 +4,64 @@ import { useState } from "react";
 import { useAction, useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Doc } from "@/../convex/_generated/dataModel";
+import { clsx } from "clsx";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer,
+  ResponsiveContainer, Cell,
 } from "recharts";
 
 // ── Date helpers ────────────────────────────────────────────────
 const MONTHS_ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-/** "2026-01-01"  →  "01-Jan-2026" */
 function toAPIDate(iso: string): string {
   const d = new Date(iso + "T00:00:00");
   return `${String(d.getDate()).padStart(2,"0")}-${MONTHS_ABBR[d.getMonth()]}-${d.getFullYear()}`;
 }
 
-/** First day of current month as ISO */
 function firstOfMonth(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`;
 }
 
-/** Today as ISO */
 function todayISO(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-// ── Types ────────────────────────────────────────────────────────
-type ApiRow = Record<string, string | number | null>;
-
-interface ParsedStats {
-  totalLeads: number;
-  totalReg: number;
-  convRate: string;
-  cceList: string[];
+function fmtINR(v: number): string {
+  const sign = v < 0 ? "-" : "";
+  return `${sign}${Math.abs(v).toLocaleString("en-IN")}`;
 }
 
-// Try to detect column names flexibly (API may vary capitalisation)
-function findKey(row: ApiRow, candidates: string[]): string | undefined {
-  const keys = Object.keys(row).map(k => k.toLowerCase());
-  for (const c of candidates) {
-    const idx = keys.indexOf(c.toLowerCase());
-    if (idx !== -1) return Object.keys(row)[idx];
-  }
-  return undefined;
+// ── API row shape ────────────────────────────────────────────────
+interface RawApiRow {
+  Leads?: number;
+  ROI?: number;
+  FromDate?: string;
+  ToDate?: string;
+  DisplayColumns?: { CCE?: string; [key: string]: unknown };
+  [key: string]: unknown;
 }
 
-function parseStats(rows: ApiRow[]): ParsedStats {
-  if (!rows.length) return { totalLeads: 0, totalReg: 0, convRate: "—", cceList: [] };
+interface FlatRow {
+  cce:      string;
+  leads:    number;
+  roi:      number;
+  fromDate: string;
+  toDate:   string;
+}
 
-  const sample = rows[0];
-  const leadsKey = findKey(sample, ["leads_allocated","leads","total_leads","leadsallocated","allocated"]);
-  const regKey   = findKey(sample, ["registration","registrations","reg","registered"]);
-  const cceKey   = findKey(sample, ["cce","cce_name","ccename","name","csm"]);
-
-  let totalLeads = 0, totalReg = 0;
-  const cceSet = new Set<string>();
-
-  for (const r of rows) {
-    if (leadsKey) totalLeads += Number(r[leadsKey] ?? 0);
-    if (regKey)   totalReg   += Number(r[regKey]   ?? 0);
-    if (cceKey && r[cceKey]) cceSet.add(String(r[cceKey]));
-  }
-
-  const convRate = totalLeads > 0
-    ? `${((totalReg / totalLeads) * 100).toFixed(1)}%`
-    : "—";
-
-  return { totalLeads, totalReg, convRate, cceList: [...cceSet].sort() };
+function flattenRow(r: RawApiRow): FlatRow {
+  const cce = r.DisplayColumns?.CCE
+    ?? (typeof r.CCE === "string" ? r.CCE : "")
+    ?? String(Object.values(r.DisplayColumns ?? {})[0] ?? "Unknown");
+  return {
+    cce:      String(cce).trim(),
+    leads:    Number(r.Leads  ?? 0),
+    roi:      Number(r.ROI    ?? 0),
+    fromDate: String(r.FromDate ?? ""),
+    toDate:   String(r.ToDate   ?? ""),
+  };
 }
 
 // ── Component ────────────────────────────────────────────────────
@@ -79,22 +69,21 @@ export default function LeadsPage() {
   const fetchROI = useAction(api.actions.koenigApi.getROIData);
   const njs      = useQuery(api.queries.newJoiners.list, {});
 
-  // Normalised set of NJ names from the Google Sheet
   const njNameSet = new Set(
     (njs ?? []).map((n: Doc<"newJoiners">) => n.name.toLowerCase().trim())
   );
 
-  const [fromDate, setFromDate] = useState(firstOfMonth());
-  const [toDate,   setToDate]   = useState(todayISO());
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState<string | null>(null);
-  const [rawData,  setRawData]  = useState<ApiRow[] | null>(null);
-  const [cceFilter, setCceFilter] = useState<string>("all");
+  const [fromDate,   setFromDate]   = useState(firstOfMonth());
+  const [toDate,     setToDate]     = useState(todayISO());
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
+  const [rows,       setRows]       = useState<FlatRow[] | null>(null);
+  const [cceFilter,  setCceFilter]  = useState<string>("all");
 
   async function handleFetch() {
     setLoading(true);
     setError(null);
-    setRawData(null);
+    setRows(null);
     setCceFilter("all");
     try {
       const result = await fetchROI({
@@ -109,24 +98,16 @@ export default function LeadsPage() {
       }
 
       const content = result.content;
-      const rows: ApiRow[] = Array.isArray(content)
-        ? content
-        : Array.isArray(content?.data)
-          ? content.data
-          : typeof content === "object" && content !== null
-            ? [content]
-            : [];
+      const raw: RawApiRow[] = Array.isArray(content) ? content : [];
 
-      // Keep only rows whose CCE name matches a CSM in our dashboard
-      const cceKey = rows.length ? findKey(rows[0], ["cce","cce_name","ccename","name","csm"]) : undefined;
-      const filtered = njNameSet.size > 0 && cceKey
-        ? rows.filter(r => {
-            const val = r[cceKey];
-            return val && njNameSet.has(String(val).toLowerCase().trim());
-          })
-        : rows;
+      // Flatten + filter to dashboard CSMs only
+      const flat = raw
+        .map(flattenRow)
+        .filter(r =>
+          njNameSet.size === 0 || njNameSet.has(r.cce.toLowerCase().trim())
+        );
 
-      setRawData(filtered);
+      setRows(flat);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
@@ -134,32 +115,26 @@ export default function LeadsPage() {
     }
   }
 
-  // Derived data
-  const stats      = rawData ? parseStats(rawData) : null;
-  const filtered   = rawData
-    ? (cceFilter === "all"
-        ? rawData
-        : rawData.filter(r => {
-            const k = findKey(r, ["cce","cce_name","ccename","name","csm"]);
-            return k && String(r[k]) === cceFilter;
-          }))
+  // Derived
+  const cceList     = rows ? [...new Set(rows.map(r => r.cce))].sort() : [];
+  const filtered    = rows
+    ? (cceFilter === "all" ? rows : rows.filter(r => r.cce === cceFilter))
     : [];
 
-  // Chart data — one bar per row / CCE
-  const chartData = filtered.map(r => {
-    const leadsKey = findKey(r, ["leads_allocated","leads","total_leads","leadsallocated","allocated"]);
-    const regKey   = findKey(r, ["registration","registrations","reg","registered"]);
-    const cceKey   = findKey(r, ["cce","cce_name","ccename","name","csm"]);
-    const label    = cceKey ? String(r[cceKey] ?? "—").split(" ")[0] : "—"; // first word for brevity
-    return {
-      name:          label,
-      Leads:         leadsKey ? Number(r[leadsKey] ?? 0) : 0,
-      Registrations: regKey   ? Number(r[regKey]   ?? 0) : 0,
-    };
-  });
+  const totalLeads    = filtered.reduce((s, r) => s + r.leads, 0);
+  const totalROI      = filtered.reduce((s, r) => s + r.roi,   0);
+  const positiveCount = filtered.filter(r => r.roi > 0).length;
+  const negativeCount = filtered.filter(r => r.roi < 0).length;
 
-  // All column headers from the data (for the raw table)
-  const columns = rawData?.length ? Object.keys(rawData[0]) : [];
+  // Chart data — sorted by leads desc
+  const chartData = [...filtered]
+    .sort((a, b) => b.leads - a.leads)
+    .map(r => ({
+      name: r.cce.split(" ")[0],  // first name for brevity on axis
+      fullName: r.cce,
+      Leads: r.leads,
+      ROI:   r.roi,
+    }));
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -167,7 +142,7 @@ export default function LeadsPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Leads / TAT</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Monthly leads, registrations and conversion rates from API</p>
+        <p className="text-sm text-gray-500 mt-0.5">Leads and ROI from the Koenig API — filtered to dashboard CSMs</p>
       </div>
 
       {/* Filters */}
@@ -176,39 +151,33 @@ export default function LeadsPage() {
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">From Date</label>
             <input
-              type="date"
-              value={fromDate}
-              onChange={e => setFromDate(e.target.value)}
+              type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">To Date</label>
             <input
-              type="date"
-              value={toDate}
-              onChange={e => setToDate(e.target.value)}
+              type="date" value={toDate} onChange={e => setToDate(e.target.value)}
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
           </div>
-          {stats && stats.cceList.length > 0 && (
+          {rows && cceList.length > 0 && (
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">CSM / CCE</label>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">CSM</label>
               <select
-                value={cceFilter}
-                onChange={e => setCceFilter(e.target.value)}
+                value={cceFilter} onChange={e => setCceFilter(e.target.value)}
                 className="text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300"
               >
                 <option value="all">All CSMs</option>
-                {stats.cceList.map(name => (
+                {cceList.map(name => (
                   <option key={name} value={name}>{name}</option>
                 ))}
               </select>
             </div>
           )}
           <button
-            onClick={handleFetch}
-            disabled={loading}
+            onClick={handleFetch} disabled={loading}
             className="ml-auto px-5 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Fetching…" : "Fetch Data"}
@@ -236,129 +205,150 @@ export default function LeadsPage() {
       )}
 
       {/* Results */}
-      {!loading && rawData && (
+      {!loading && rows && (
         <>
           {/* Stat cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
             {[
-              { label: "Total Leads",        value: stats?.totalLeads,  bg: "from-indigo-400 to-violet-500" },
-              { label: "Total Registrations", value: stats?.totalReg,   bg: "from-emerald-500 to-teal-600"  },
-              { label: "Conversion Rate",     value: stats?.convRate,   bg: "from-amber-400 to-yellow-500"  },
-              { label: "Total CSMs",          value: stats?.cceList.length, bg: "from-blue-400 to-indigo-500" },
+              { label: "Total Leads",      value: totalLeads,      bg: "from-indigo-400 to-violet-500" },
+              { label: "Total ROI",        value: fmtINR(totalROI), bg: totalROI >= 0 ? "from-emerald-500 to-teal-600" : "from-red-500 to-rose-600" },
+              { label: "Positive ROI CSMs", value: positiveCount,  bg: "from-amber-400 to-yellow-500"  },
+              { label: "Negative ROI CSMs", value: negativeCount,  bg: "from-slate-600 to-gray-700"    },
             ].map(c => (
               <div key={c.label} className={`bg-gradient-to-br ${c.bg} rounded-2xl p-5 text-white shadow-lg card-hover`}>
                 <div className="text-xs font-medium text-white/70 mb-2">{c.label}</div>
-                <div className="text-4xl font-black">{c.value ?? <span className="text-white/40">—</span>}</div>
+                <div className="text-3xl font-black break-all">{c.value}</div>
               </div>
             ))}
           </div>
 
-          {/* Bar chart */}
+          {/* Leads bar chart */}
           {chartData.length > 0 && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-              <h2 className="text-sm font-semibold text-gray-700 mb-0.5">Leads vs Registrations — by CSM</h2>
-              <p className="text-xs text-gray-400 mb-4">
-                {toAPIDate(fromDate)} to {toAPIDate(toDate)}
-              </p>
+              <h2 className="text-sm font-semibold text-gray-700 mb-0.5">Leads Allocated — by CSM</h2>
+              <p className="text-xs text-gray-400 mb-4">{toAPIDate(fromDate)} to {toAPIDate(toDate)}</p>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 40 }}>
+                  <BarChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 50 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fontSize: 11, fill: "#9ca3af" }}
-                      axisLine={false} tickLine={false}
-                      angle={-35} textAnchor="end" interval={0}
-                    />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9ca3af" }}
+                      axisLine={false} tickLine={false} angle={-40} textAnchor="end" interval={0} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                     <Tooltip
+                      formatter={(val, _name, props) => [val, props.payload.fullName]}
                       contentStyle={{ fontSize: 12, borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}
                       cursor={{ fill: "#f9fafb" }}
                     />
-                    <Legend
-                      iconType="circle" iconSize={9}
-                      formatter={v => <span className="text-xs text-gray-600">{v}</span>}
-                    />
-                    <Bar dataKey="Leads"         fill="#a5b4fc" radius={[5,5,0,0]} />
-                    <Bar dataKey="Registrations" fill="#86efac" radius={[5,5,0,0]} />
+                    <Bar dataKey="Leads" radius={[5,5,0,0]}>
+                      {chartData.map((_, i) => (
+                        <Cell key={i} fill="#a5b4fc" />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
           )}
 
-          {/* Data table */}
+          {/* ROI bar chart */}
+          {chartData.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-0.5">ROI — by CSM</h2>
+              <p className="text-xs text-gray-400 mb-4">Green = positive · Red = negative</p>
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 50 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9ca3af" }}
+                      axisLine={false} tickLine={false} angle={-40} textAnchor="end" interval={0} />
+                    <YAxis tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false}
+                      tickFormatter={v => v >= 1000 || v <= -1000 ? `${(v/1000).toFixed(0)}k` : String(v)} />
+                    <Tooltip
+                      formatter={(val, _name, props) => [fmtINR(Number(val)), props.payload.fullName]}
+                      contentStyle={{ fontSize: 12, borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}
+                      cursor={{ fill: "#f9fafb" }}
+                    />
+                    <Bar dataKey="ROI" radius={[5,5,0,0]}>
+                      {chartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.ROI >= 0 ? "#86efac" : "#fca5a5"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
+          {/* Table */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-gray-700">
                 Detailed Breakdown
-                {cceFilter !== "all" && (
-                  <span className="ml-2 text-indigo-500 font-normal">— {cceFilter}</span>
-                )}
+                {cceFilter !== "all" && <span className="ml-2 text-indigo-500 font-normal">— {cceFilter}</span>}
               </h2>
-              <span className="text-xs text-gray-400">{filtered.length} row{filtered.length !== 1 ? "s" : ""}</span>
+              <span className="text-xs text-gray-400">{filtered.length} CSM{filtered.length !== 1 ? "s" : ""}</span>
             </div>
 
             {filtered.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-8">No data for the selected filters.</p>
+              <p className="text-sm text-gray-400 text-center py-8">No matching CSMs found.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-xs border-collapse">
+                <table className="w-full text-sm border-collapse">
                   <thead>
                     <tr className="border-b-2 border-gray-100 bg-gray-50/60">
-                      <th className="text-left py-2.5 px-3 font-semibold text-gray-500 w-8">#</th>
-                      {columns.map(col => (
-                        <th key={col} className="text-left py-2.5 px-3 font-semibold text-gray-500 whitespace-nowrap">
-                          {col.replace(/_/g, " ")}
-                        </th>
-                      ))}
+                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 w-8">#</th>
+                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500">CSM Name</th>
+                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500">Leads Allocated</th>
+                      <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500">ROI</th>
+                      <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">ROI Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
-                    {filtered.map((row, i) => (
-                      <tr key={i} className="hover:bg-indigo-50/20 transition-colors">
-                        <td className="py-2.5 px-3 text-gray-300">{i + 1}</td>
-                        {columns.map(col => {
-                          const val = row[col];
-                          // Highlight conversion-rate-like columns
-                          const isRate = /rate|conv/i.test(col);
-                          const isLeads = /leads|allocated/i.test(col);
-                          const isReg   = /reg/i.test(col);
-                          return (
-                            <td key={col} className="py-2.5 px-3 whitespace-nowrap tabular-nums">
-                              {val === null || val === "" || val === undefined ? (
-                                <span className="text-gray-300">—</span>
-                              ) : isRate ? (
-                                <span className="font-semibold text-amber-600">{val}</span>
-                              ) : isLeads ? (
-                                <span className="font-semibold text-indigo-600">{val}</span>
-                              ) : isReg ? (
-                                <span className="font-semibold text-emerald-600">{val}</span>
-                              ) : (
-                                <span className="text-gray-700">{String(val)}</span>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
+                    {[...filtered]
+                      .sort((a, b) => b.leads - a.leads)
+                      .map((row, i) => (
+                        <tr key={row.cce} className="hover:bg-indigo-50/20 transition-colors group">
+                          <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
+                          <td className="py-2.5 px-3 text-xs font-semibold text-gray-800 group-hover:text-gray-900">
+                            {row.cce}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-xs font-semibold text-indigo-600 tabular-nums">
+                            {row.leads}
+                          </td>
+                          <td className={clsx(
+                            "py-2.5 px-3 text-right text-sm font-bold tabular-nums",
+                            row.roi > 0 ? "text-emerald-600" : row.roi < 0 ? "text-red-600" : "text-gray-700"
+                          )}>
+                            {fmtINR(row.roi)}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className={clsx(
+                              "inline-block text-xs font-semibold px-2.5 py-1 rounded-lg ring-1",
+                              row.roi > 0
+                                ? "bg-green-100 text-green-700 ring-green-200/60"
+                                : "bg-red-100 text-red-700 ring-red-200/60"
+                            )}>
+                              {row.roi > 0 ? "Positive" : "Negative"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
             )}
           </div>
 
-          {/* Raw count note */}
-          {rawData.length === 0 && (
+          {rows.length === 0 && (
             <p className="text-sm text-gray-400 text-center py-4">
-              API returned no records for this date range.
+              No dashboard CSMs found in the API response for this date range.
             </p>
           )}
         </>
       )}
 
       {/* Empty state */}
-      {!loading && !rawData && !error && (
+      {!loading && !rows && !error && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 text-center">
           <div className="text-4xl mb-3">📊</div>
           <p className="text-sm font-semibold text-gray-700">Select a date range and click Fetch Data</p>
