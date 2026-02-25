@@ -1,5 +1,43 @@
 import { query } from "../_generated/server";
 
+export const njPerformanceStatus = query({
+  args: {},
+  handler: async (ctx) => {
+    const njs = await ctx.db
+      .query("newJoiners")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .collect();
+    const allNR = await ctx.db.query("nrRecords").collect();
+
+    return [...njs]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((nj) => {
+        const records = allNR.filter((r) => r.njId === nj._id);
+        let nrStatus: "Positive" | "Negative" | null = null;
+        let roiStatus: "Positive" | "Negative" | null = null;
+
+        if (records.length > 0) {
+          const latest = records.sort((a, b) =>
+            a.year !== b.year ? b.year - a.year : b.month - a.month
+          )[0];
+          nrStatus = latest.isPositive ? "Positive" : "Negative";
+
+          const total = records.reduce((s, r) => s + r.nrValue, 0);
+          roiStatus = total > 0 ? "Positive" : "Negative";
+        }
+
+        return {
+          _id: nj._id,
+          name: nj.name,
+          tenureMonths: nj.tenureMonths,
+          nrStatus,
+          roiStatus,
+          claimedCorporates: nj.claimedCorporates ?? 0,
+        };
+      });
+  },
+});
+
 // Aggregate KPI summary for the overview stat cards
 export const dashboardSummary = query({
   args: {},
