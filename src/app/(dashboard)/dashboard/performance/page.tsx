@@ -11,6 +11,15 @@ import {
 
 type NRROIStatus = "Positive" | "Negative" | null;
 
+// Pastel palette — green, red, black only
+const P_GREEN = { bg: "bg-green-100",  text: "text-green-700",  ring: "ring-green-200/60"  };
+const P_RED   = { bg: "bg-red-100",    text: "text-red-700",    ring: "ring-red-200/60"    };
+const P_BLACK = { bg: "bg-gray-100",   text: "text-gray-700",   ring: "ring-gray-200/60"   };
+
+// Hex fills for charts
+const C_GREEN = "#86efac";   // green-300
+const C_RED   = "#fca5a5";   // red-300
+
 function fmtTenure(months: number): string {
   if (months < 1) return "< 1 mo";
   if (months < 12) return `${months} mo`;
@@ -19,44 +28,38 @@ function fmtTenure(months: number): string {
   return mo > 0 ? `${yr} yr ${mo} mo` : `${yr} yr`;
 }
 
-function computeDev(nrStatus: NRROIStatus, roiStatus: NRROIStatus): boolean | null {
-  if (!nrStatus && !roiStatus) return null;
-  return nrStatus === "Positive" && roiStatus === "Positive";
+function computeDev(nr: NRROIStatus, roi: NRROIStatus): boolean | null {
+  if (!nr && !roi) return null;
+  return nr === "Positive" && roi === "Positive";
 }
 
-function computeAction(nrStatus: NRROIStatus, roiStatus: NRROIStatus, tenureMonths: number): string | null {
-  if (!nrStatus && !roiStatus) return null;
-  const hasIssue = nrStatus !== "Positive" || roiStatus !== "Positive";
-  if (!hasIssue) return "On Track";
-  return tenureMonths > 4 ? "PA/PIP Suggested" : "Under Observation";
+function computeAction(nr: NRROIStatus, roi: NRROIStatus, tenure: number): string | null {
+  if (!nr && !roi) return null;
+  if (nr === "Positive" && roi === "Positive") return "On Track";
+  return tenure > 4 ? "PA/PIP Suggested" : "Under Observation";
+}
+
+function Pill({ label, palette }: { label: string; palette: typeof P_GREEN }) {
+  return (
+    <span className={clsx(
+      "inline-block text-xs font-semibold px-2.5 py-1 rounded-lg whitespace-nowrap ring-1",
+      palette.bg, palette.text, palette.ring
+    )}>
+      {label}
+    </span>
+  );
 }
 
 function NRROIBadge({ status }: { status: NRROIStatus }) {
   if (!status) return <span className="text-gray-300 text-xs select-none">—</span>;
-  return (
-    <span className={clsx(
-      "inline-block text-xs font-semibold px-2.5 py-1 rounded-lg",
-      status === "Positive"
-        ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/60"
-        : "bg-red-100 text-red-700 ring-1 ring-red-200/60"
-    )}>
-      {status}
-    </span>
-  );
+  return <Pill label={status} palette={status === "Positive" ? P_GREEN : P_RED} />;
 }
 
 function StatusBadge({ dev, tenure }: { dev: boolean | null; tenure: number }) {
   if (dev === null) return <span className="text-gray-300 text-xs select-none">—</span>;
   return (
     <div className="inline-flex flex-col items-center gap-0.5">
-      <span className={clsx(
-        "inline-block text-xs font-semibold px-2.5 py-1 rounded-lg whitespace-nowrap",
-        dev
-          ? "bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200/60"
-          : "bg-pink-100 text-pink-700 ring-1 ring-pink-200/60"
-      )}>
-        {dev ? "Developed" : "Not Developed"}
-      </span>
+      <Pill label={dev ? "Developed" : "Not Developed"} palette={dev ? P_GREEN : P_RED} />
       <span className="text-[10px] text-gray-400">within {fmtTenure(tenure)}</span>
     </div>
   );
@@ -64,19 +67,10 @@ function StatusBadge({ dev, tenure }: { dev: boolean | null; tenure: number }) {
 
 function ActionBadge({ action }: { action: string | null }) {
   if (!action) return <span className="text-gray-300 text-xs select-none">—</span>;
-  const styles: Record<string, string> = {
-    "On Track":           "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/60",
-    "Under Observation":  "bg-amber-50 text-amber-600 ring-1 ring-amber-200/60",
-    "PA/PIP Suggested":   "bg-rose-100 text-rose-700 ring-1 ring-rose-200/60",
-  };
-  return (
-    <span className={clsx(
-      "inline-block text-xs font-semibold px-2.5 py-1 rounded-lg whitespace-nowrap",
-      styles[action] ?? "bg-gray-100 text-gray-600"
-    )}>
-      {action}
-    </span>
-  );
+  const palette =
+    action === "On Track"          ? P_GREEN :
+    action === "PA/PIP Suggested"  ? P_RED   : P_BLACK;
+  return <Pill label={action} palette={palette} />;
 }
 
 const renderActiveShape = (props: Record<string, number & string>) => {
@@ -111,61 +105,36 @@ export default function PerformancePage() {
     suggestedAction: computeAction(row.nrStatus, row.roiStatus, row.tenureMonths),
   }));
 
-  const developedRows    = enriched?.filter(r => r.dev === true)  ?? [];
-  const notDevelopedRows = enriched?.filter(r => r.dev === false) ?? [];
-  const noDataRows       = enriched?.filter(r => r.dev === null)  ?? [];
-
-  const devCount    = developedRows.length;
-  const notDevCount = notDevelopedRows.length;
+  const devCount    = enriched?.filter(r => r.dev === true).length  ?? 0;
+  const notDevCount = enriched?.filter(r => r.dev === false).length ?? 0;
   const underObs    = enriched?.filter(r => r.suggestedAction === "Under Observation").length ?? 0;
   const pipCount    = enriched?.filter(r => r.suggestedAction === "PA/PIP Suggested").length ?? 0;
 
   const statCards = [
-    { label: "Developed",         value: devCount,    desc: "Both NR & ROI positive",      bg: "from-indigo-400 to-violet-500" },
-    { label: "Not Developed",     value: notDevCount, desc: "NR or ROI negative",           bg: "from-pink-400 to-rose-500" },
-    { label: "Under Observation", value: underObs,    desc: "Negative within 4 months",     bg: "from-purple-400 to-indigo-500" },
-    { label: "PA/PIP Suggested",  value: pipCount,    desc: "Negative beyond 4 months",     bg: "from-rose-500 to-red-600" },
+    { label: "Developed",         value: devCount,    desc: "Both NR & ROI positive",  bg: "from-indigo-400 to-violet-500" },
+    { label: "Not Developed",     value: notDevCount, desc: "NR or ROI negative",       bg: "from-pink-400 to-rose-500" },
+    { label: "Under Observation", value: underObs,    desc: "Negative within 4 months", bg: "from-purple-400 to-indigo-500" },
+    { label: "PA/PIP Suggested",  value: pipCount,    desc: "Negative beyond 4 months", bg: "from-rose-500 to-red-600" },
   ];
 
-  // Pie chart
+  // Pie chart data
   const pieData = [
-    { name: "Developed",     value: devCount,    color: "#a5b4fc" },
-    { name: "Not Developed", value: notDevCount, color: "#f9a8d4" },
+    { name: "Developed",     value: devCount,    color: C_GREEN },
+    { name: "Not Developed", value: notDevCount, color: C_RED   },
   ].filter(d => d.value > 0);
 
   // Bar chart by tenure group
   const tenureGroups = [
-    { name: "≤ 2 mo",  Developed: 0, "Not Developed": 0 },
-    { name: "3–4 mo",  Developed: 0, "Not Developed": 0 },
-    { name: "> 4 mo",  Developed: 0, "Not Developed": 0 },
+    { name: "≤ 2 mo", Developed: 0, "Not Developed": 0 },
+    { name: "3–4 mo", Developed: 0, "Not Developed": 0 },
+    { name: "> 4 mo", Developed: 0, "Not Developed": 0 },
   ];
   enriched?.forEach(r => {
     if (r.dev === null) return;
-    const bucket = r.tenureMonths <= 2 ? 0 : r.tenureMonths <= 4 ? 1 : 2;
-    if (r.dev) tenureGroups[bucket].Developed++;
-    else tenureGroups[bucket]["Not Developed"]++;
+    const b = r.tenureMonths <= 2 ? 0 : r.tenureMonths <= 4 ? 1 : 2;
+    if (r.dev) tenureGroups[b].Developed++;
+    else tenureGroups[b]["Not Developed"]++;
   });
-
-  function renderRow(
-    row: NonNullable<typeof enriched>[number],
-    serial: number,
-    hoverClass: string
-  ) {
-    return (
-      <tr key={row._id} className={clsx("transition-colors group", hoverClass)}>
-        <td className="py-2.5 px-3 text-xs text-gray-300">{serial}</td>
-        <td className="py-2.5 px-3 text-xs font-semibold text-gray-800 group-hover:text-gray-900">{row.name}</td>
-        <td className="py-2.5 px-3 text-xs text-gray-400">{fmtTenure(row.tenureMonths)}</td>
-        <td className="py-2.5 px-3 text-center"><NRROIBadge status={row.nrStatus} /></td>
-        <td className="py-2.5 px-3 text-center"><NRROIBadge status={row.roiStatus} /></td>
-        <td className="py-2.5 px-3 text-center"><StatusBadge dev={row.dev} tenure={row.tenureMonths} /></td>
-        <td className="py-2.5 px-3 text-center"><ActionBadge action={row.suggestedAction} /></td>
-        <td className="py-2.5 px-3 text-right text-xs font-semibold text-gray-700 tabular-nums">
-          {row.claimedCorporates > 0 ? row.claimedCorporates : <span className="text-gray-300">—</span>}
-        </td>
-      </tr>
-    );
-  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -188,7 +157,48 @@ export default function PerformancePage() {
         ))}
       </div>
 
-      {/* Charts */}
+      {/* Table */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">CSM Performance Breakdown</h2>
+        {rows ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b-2 border-gray-100 bg-gray-50/60">
+                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 w-8">#</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500">CSM Name</th>
+                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500">Tenure</th>
+                  <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">NR Status</th>
+                  <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">ROI Status</th>
+                  <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500">Corporates Claimed</th>
+                  <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">Status</th>
+                  <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">Suggested Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {enriched?.map((row, i) => (
+                  <tr key={row._id} className="hover:bg-gray-50/60 transition-colors group">
+                    <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
+                    <td className="py-2.5 px-3 text-xs font-semibold text-gray-800 group-hover:text-gray-900">{row.name}</td>
+                    <td className="py-2.5 px-3 text-xs text-gray-400">{fmtTenure(row.tenureMonths)}</td>
+                    <td className="py-2.5 px-3 text-center"><NRROIBadge status={row.nrStatus} /></td>
+                    <td className="py-2.5 px-3 text-center"><NRROIBadge status={row.roiStatus} /></td>
+                    <td className="py-2.5 px-3 text-right text-xs font-semibold text-gray-700 tabular-nums">
+                      {row.claimedCorporates > 0 ? row.claimedCorporates : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="py-2.5 px-3 text-center"><StatusBadge dev={row.dev} tenure={row.tenureMonths} /></td>
+                    <td className="py-2.5 px-3 text-center"><ActionBadge action={row.suggestedAction} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="animate-pulse h-64 bg-gray-50 rounded-xl" />
+        )}
+      </div>
+
+      {/* Charts — below the table */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Donut — Developed vs Not Developed */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -241,73 +251,12 @@ export default function PerformancePage() {
                   iconSize={9}
                   formatter={(v) => <span className="text-xs text-gray-600">{v}</span>}
                 />
-                <Bar dataKey="Developed"     fill="#a5b4fc" radius={[5, 5, 0, 0]} />
-                <Bar dataKey="Not Developed" fill="#f9a8d4" radius={[5, 5, 0, 0]} />
+                <Bar dataKey="Developed"     fill={C_GREEN} radius={[5, 5, 0, 0]} />
+                <Bar dataKey="Not Developed" fill={C_RED}   radius={[5, 5, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">CSM Performance Breakdown</h2>
-        {rows ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b-2 border-gray-100 bg-gray-50/60">
-                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 w-8">#</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500">CSM Name</th>
-                  <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500">Tenure</th>
-                  <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">NR Status</th>
-                  <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">ROI Status</th>
-                  <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">Status</th>
-                  <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">Suggested Action</th>
-                  <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500">Corporates Claimed</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-
-                {/* ── Developed section ── */}
-                {developedRows.length > 0 && (
-                  <tr>
-                    <td colSpan={8} className="py-2 px-3 bg-indigo-50/60">
-                      <span className="text-xs font-bold text-indigo-500 uppercase tracking-wider">
-                        Developed ({developedRows.length})
-                      </span>
-                    </td>
-                  </tr>
-                )}
-                {developedRows.map((row, i) =>
-                  renderRow(row, i + 1, "hover:bg-indigo-50/30")
-                )}
-
-                {/* ── Not Developed section ── */}
-                {notDevelopedRows.length > 0 && (
-                  <tr>
-                    <td colSpan={8} className="py-2 px-3 bg-pink-50/60">
-                      <span className="text-xs font-bold text-pink-500 uppercase tracking-wider">
-                        Not Developed ({notDevelopedRows.length})
-                      </span>
-                    </td>
-                  </tr>
-                )}
-                {notDevelopedRows.map((row, i) =>
-                  renderRow(row, developedRows.length + i + 1, "hover:bg-pink-50/20")
-                )}
-
-                {/* ── No data rows ── */}
-                {noDataRows.map((row, i) =>
-                  renderRow(row, developedRows.length + notDevelopedRows.length + i + 1, "hover:bg-gray-50")
-                )}
-
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="animate-pulse h-64 bg-gray-50 rounded-xl" />
-        )}
       </div>
     </div>
   );
