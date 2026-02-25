@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAction, useQuery } from "convex/react";
+import { useAction, useQuery, useConvexAuth } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Doc } from "@/../convex/_generated/dataModel";
 import { clsx } from "clsx";
@@ -187,6 +187,7 @@ function CSMChart({ row }: { row: FlatRow }) {
 
 // ── Main page ────────────────────────────────────────────────────
 export default function LeadsPage() {
+  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
   const fetchROI = useAction(api.actions.koenigApi.getROIData);
   const njs      = useQuery(api.queries.newJoiners.list, {});
 
@@ -252,9 +253,11 @@ export default function LeadsPage() {
   }, [fetchROI]);
 
   useEffect(() => {
-    doFetch(fromDate, toDate);
+    if (!authLoading && isAuthenticated) {
+      doFetch(fromDate, toDate);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authLoading, isAuthenticated]);
 
   // Stat card totals — always from ALL rows (full CSM set, not filtered by csmFilter)
   const totalLeads = rows?.reduce((s, r) => s + r.leads, 0) ?? 0;
