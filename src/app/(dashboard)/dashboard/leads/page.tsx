@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useAction } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
+import { Doc } from "@/../convex/_generated/dataModel";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer,
@@ -76,6 +77,12 @@ function parseStats(rows: ApiRow[]): ParsedStats {
 // ── Component ────────────────────────────────────────────────────
 export default function LeadsPage() {
   const fetchROI = useAction(api.actions.koenigApi.getROIData);
+  const njs      = useQuery(api.queries.newJoiners.list, {});
+
+  // Normalised set of NJ names from the Google Sheet
+  const njNameSet = new Set(
+    (njs ?? []).map((n: Doc<"newJoiners">) => n.name.toLowerCase().trim())
+  );
 
   const [fromDate, setFromDate] = useState(firstOfMonth());
   const [toDate,   setToDate]   = useState(todayISO());
@@ -109,7 +116,17 @@ export default function LeadsPage() {
           : typeof content === "object" && content !== null
             ? [content]
             : [];
-      setRawData(rows);
+
+      // Keep only rows whose CCE name matches a CSM in our dashboard
+      const cceKey = rows.length ? findKey(rows[0], ["cce","cce_name","ccename","name","csm"]) : undefined;
+      const filtered = njNameSet.size > 0 && cceKey
+        ? rows.filter(r => {
+            const val = r[cceKey];
+            return val && njNameSet.has(String(val).toLowerCase().trim());
+          })
+        : rows;
+
+      setRawData(filtered);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
