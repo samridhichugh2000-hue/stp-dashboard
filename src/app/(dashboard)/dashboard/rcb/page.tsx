@@ -6,7 +6,7 @@ import { Id } from "@/../convex/_generated/dataModel";
 import { NJFilter } from "@/components/shared/NJFilter";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { CorpClaimsTable } from "@/components/panels/rcb/CorpClaimsTable";
-function formatINR(v:number){ if(v>=100000) return `₹${(v/100000).toFixed(1)}L`; return `₹${(v/1000).toFixed(0)}K`; }
+function formatINR(v:number){ const sign = v < 0 ? "-" : ""; return `${sign}${Math.abs(v).toLocaleString("en-IN")}`; }
 export default function RCBPage() {
   const [njId, setNjId] = useState<Id<"newJoiners"> | "all">("all");
   const njs = useQuery(api.queries.newJoiners.list, {});

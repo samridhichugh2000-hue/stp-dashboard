@@ -5,6 +5,10 @@ export default defineSchema({
   // New Joiners master table
   newJoiners: defineTable({
     name: v.string(),
+    empId: v.optional(v.string()),       // Google Sheets employee ID
+    department: v.optional(v.string()),  // e.g. "Sales"
+    location: v.optional(v.string()),    // Base location
+    email: v.optional(v.string()),       // Work email
     joinDate: v.string(), // ISO date string
     managerId: v.string(),
     currentPhase: v.union(
@@ -25,7 +29,8 @@ export default defineSchema({
     teamId: v.optional(v.string()),
   })
     .index("by_manager", ["managerId"])
-    .index("by_active", ["isActive"]),
+    .index("by_active", ["isActive"])
+    .index("by_emp_id", ["empId"]),
 
   // Qubit (call quality) scores from RMS
   qubitScores: defineTable({

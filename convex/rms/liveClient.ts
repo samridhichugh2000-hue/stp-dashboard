@@ -3,7 +3,7 @@
  * Set CONVEX_RMS_API_BASE_URL and CONVEX_RMS_BEARER_TOKEN in Convex environment.
  */
 
-import type { RMSClient, QubitRecord, LeadRecord, NRRecord, ROIRecord, RCBRecord } from "./adapter";
+import type { RMSClient, NJRecord, QubitRecord, LeadRecord, NRRecord, ROIRecord, RCBRecord } from "./adapter";
 
 export class LiveRMSClient implements RMSClient {
   private baseUrl: string;
@@ -25,6 +25,11 @@ export class LiveRMSClient implements RMSClient {
       throw new Error(`RMS API error: ${res.status} ${res.statusText} at ${path}`);
     }
     return res.json() as Promise<T>;
+  }
+
+  async fetchNewJoiners(): Promise<NJRecord[]> {
+    // TODO: adjust endpoint path when RMS API docs are available
+    return this.get<NJRecord[]>("/api/v1/new-joiners");
   }
 
   async fetchQubits(): Promise<QubitRecord[]> {

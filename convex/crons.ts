@@ -29,4 +29,11 @@ crons.daily(
   internal.actions.evaluateMilestones.evaluateMilestones
 );
 
+// Sync Google Sheets every hour (NJs, NR, ROI, RCB)
+crons.interval(
+  "syncGoogleSheets",
+  { hours: 1 },
+  internal.actions.syncGoogleSheets.syncGoogleSheets
+);
+
 export default crons;

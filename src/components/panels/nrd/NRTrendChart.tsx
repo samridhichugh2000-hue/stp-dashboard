@@ -14,8 +14,25 @@ export function NRTrendChart({ records }: NRTrendChartProps) {
       <BarChart data={data} margin={{top:4,right:8,bottom:4,left:-8}}>
         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
         <XAxis dataKey="label" tick={{fontSize:11,fill:"#9ca3af"}} />
-        <YAxis tick={{fontSize:11,fill:"#9ca3af"}} tickFormatter={v=>v>=0?`₹${(v/1000).toFixed(0)}K`:`-₹${(Math.abs(v)/1000).toFixed(0)}K`} />
-        <Tooltip contentStyle={{fontSize:12,borderRadius:8}} formatter={(v) => [`₹${Number(v ?? 0).toLocaleString("en-IN")}`,"NR Value"]} />
+        <YAxis
+          tick={{fontSize:11,fill:"#9ca3af"}}
+          tickFormatter={v => {
+            const abs = Math.abs(v);
+            const sign = v < 0 ? "-" : "";
+            if (abs >= 10_000_000) return `${sign}₹${(abs/10_000_000).toFixed(1)}Cr`;
+            if (abs >= 100_000)    return `${sign}₹${(abs/100_000).toFixed(1)}L`;
+            if (abs >= 1_000)      return `${sign}₹${(abs/1_000).toFixed(0)}K`;
+            return `${sign}₹${abs}`;
+          }}
+          width={70}
+        />
+        <Tooltip
+          contentStyle={{fontSize:12,borderRadius:8}}
+          formatter={(v: number) => [
+            `${v < 0 ? "-" : ""}${Math.abs(v).toLocaleString("en-IN")}`,
+            "NR Value"
+          ]}
+        />
         <ReferenceLine y={0} stroke="#d1d5db" />
         <Bar dataKey="value" radius={[4,4,0,0]}>
           {data.map((d,i)=><Cell key={i} fill={d.positive?"#10b981":"#ef4444"} />)}

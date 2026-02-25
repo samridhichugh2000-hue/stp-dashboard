@@ -10,6 +10,8 @@
 
 import type * as actions_evaluateCategories from "../actions/evaluateCategories.js";
 import type * as actions_evaluateMilestones from "../actions/evaluateMilestones.js";
+import type * as actions_purgeNonSheetData from "../actions/purgeNonSheetData.js";
+import type * as actions_syncGoogleSheets from "../actions/syncGoogleSheets.js";
 import type * as actions_syncLeads from "../actions/syncLeads.js";
 import type * as actions_syncNR from "../actions/syncNR.js";
 import type * as actions_syncQubits from "../actions/syncQubits.js";
@@ -19,6 +21,7 @@ import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as mutations_assessmentChecklists from "../mutations/assessmentChecklists.js";
+import type * as mutations_cleanup from "../mutations/cleanup.js";
 import type * as mutations_huddleLogs from "../mutations/huddleLogs.js";
 import type * as mutations_leads from "../mutations/leads.js";
 import type * as mutations_newJoiners from "../mutations/newJoiners.js";
@@ -38,6 +41,7 @@ import type * as queries_rcb from "../queries/rcb.js";
 import type * as queries_roi from "../queries/roi.js";
 import type * as queries_syncLogs from "../queries/syncLogs.js";
 import type * as rms_adapter from "../rms/adapter.js";
+import type * as rms_googleSheetsClient from "../rms/googleSheetsClient.js";
 import type * as rms_index from "../rms/index.js";
 import type * as rms_liveClient from "../rms/liveClient.js";
 import type * as rms_mockClient from "../rms/mockClient.js";
@@ -53,6 +57,8 @@ import type {
 declare const fullApi: ApiFromModules<{
   "actions/evaluateCategories": typeof actions_evaluateCategories;
   "actions/evaluateMilestones": typeof actions_evaluateMilestones;
+  "actions/purgeNonSheetData": typeof actions_purgeNonSheetData;
+  "actions/syncGoogleSheets": typeof actions_syncGoogleSheets;
   "actions/syncLeads": typeof actions_syncLeads;
   "actions/syncNR": typeof actions_syncNR;
   "actions/syncQubits": typeof actions_syncQubits;
@@ -62,6 +68,7 @@ declare const fullApi: ApiFromModules<{
   crons: typeof crons;
   http: typeof http;
   "mutations/assessmentChecklists": typeof mutations_assessmentChecklists;
+  "mutations/cleanup": typeof mutations_cleanup;
   "mutations/huddleLogs": typeof mutations_huddleLogs;
   "mutations/leads": typeof mutations_leads;
   "mutations/newJoiners": typeof mutations_newJoiners;
@@ -81,6 +88,7 @@ declare const fullApi: ApiFromModules<{
   "queries/roi": typeof queries_roi;
   "queries/syncLogs": typeof queries_syncLogs;
   "rms/adapter": typeof rms_adapter;
+  "rms/googleSheetsClient": typeof rms_googleSheetsClient;
   "rms/index": typeof rms_index;
   "rms/liveClient": typeof rms_liveClient;
   "rms/mockClient": typeof rms_mockClient;

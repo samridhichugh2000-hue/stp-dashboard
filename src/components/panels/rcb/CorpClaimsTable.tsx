@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { ClaimStatusBadge } from "./ClaimStatusBadge";
 type ClaimStatus = "Pending" | "Approved" | "Rejected" | "Under Review";
 interface Claim { _id:string; corporateName:string; claimDate:string; status:ClaimStatus; revenueLinked:number; }
-function formatINR(v:number){ if(v>=100000) return `₹${(v/100000).toFixed(1)}L`; return `₹${(v/1000).toFixed(0)}K`; }
+function formatINR(v:number){ const sign = v < 0 ? "-" : ""; return `${sign}${Math.abs(v).toLocaleString("en-IN")}`; }
 export function CorpClaimsTable({ claims }: { claims: Claim[] }) {
   if(!claims.length) return <div className="text-center py-8 text-sm text-gray-400">No RCB claims found</div>;
   return (

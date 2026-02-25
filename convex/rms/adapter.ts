@@ -3,6 +3,17 @@
  * Swap mockClient → liveClient at M0 when RMS API credentials are available.
  */
 
+export interface NJRecord {
+  empId: string;
+  name: string;
+  department: string;
+  managerName: string;
+  location: string;
+  email: string;
+  joinDate: string; // ISO date "YYYY-MM-DD"
+  status: string;   // "Red" | "Yellow" | "Green"
+}
+
 export interface QubitRecord {
   njId: string;
   date: string;
@@ -47,6 +58,7 @@ export interface RCBRecord {
 }
 
 export interface RMSClient {
+  fetchNewJoiners(): Promise<NJRecord[]>;
   fetchQubits(): Promise<QubitRecord[]>;
   fetchLeads(): Promise<LeadRecord[]>;
   fetchNR(): Promise<NRRecord[]>;

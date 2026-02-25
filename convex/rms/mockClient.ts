@@ -4,7 +4,7 @@
  * Replace with liveClient.ts at M0 when RMS API credentials are available.
  */
 
-import type { RMSClient, QubitRecord, LeadRecord, NRRecord, ROIRecord, RCBRecord } from "./adapter";
+import type { RMSClient, NJRecord, QubitRecord, LeadRecord, NRRecord, ROIRecord, RCBRecord } from "./adapter";
 
 // Use NJ names as IDs — mutations match by name for type safety
 export const MOCK_NJ_IDS = [
@@ -209,5 +209,20 @@ export class MockRMSClient implements RMSClient {
     });
 
     return records;
+  }
+
+  async fetchNewJoiners(): Promise<NJRecord[]> {
+    const joinDates = ["2025-08-01", "2025-09-01", "2025-10-01", "2025-11-01", "2025-12-01"];
+    const statuses = ["Green", "Yellow", "Yellow", "Red", "Red"];
+    return NJ_NAMES.map((name, i) => ({
+      empId: `MOCK-${1000 + i}`,
+      name,
+      department: "Sales",
+      managerName: "Demo Manager",
+      location: "Mumbai",
+      email: `${name.toLowerCase().replace(" ", ".")}@example.com`,
+      joinDate: joinDates[i],
+      status: statuses[i],
+    }));
   }
 }
