@@ -29,24 +29,12 @@ const NUM_COLOR = {
   Zero:     "text-gray-900",
 };
 
-const PIE_COLORS = {
-  Positive: "#f59e0b",
-  Negative: "#ef4444",
-  Zero:     "#374151",
-};
-
-const CARD_CONFIG = {
-  Positive: { bg: "from-amber-400 to-yellow-500",  label: "Positive NR", desc: "CSMs with positive NR" },
-  Negative: { bg: "from-red-500 to-rose-600",       label: "Negative NR", desc: "CSMs with negative NR" },
-  Zero:     { bg: "from-slate-600 to-gray-700",     label: "Zero NR",     desc: "CSMs at zero NR" },
-};
-
 const renderActiveShape = (props: Record<string, number & string>) => {
   const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
   return (
     <g>
       <text x={cx} y={cy - 18} textAnchor="middle" fill="#374151" fontSize={13} fontWeight="600">
-        {(payload as unknown as {name:string}).name}
+        {(payload as unknown as { name: string }).name}
       </text>
       <text x={cx} y={cy + 8} textAnchor="middle" fill="#111827" fontSize={26} fontWeight="800">
         {value as unknown as number}
@@ -69,20 +57,46 @@ export default function ROIPage() {
 
   if (!rows) return <div className="animate-pulse h-96 bg-white/60 rounded-2xl" />;
 
-  let positiveCount = 0, negativeCount = 0, zeroCount = 0;
-  for (const r of rows) {
-    if (r.totalNR === null) continue;
-    const c = colorOf(r.totalNR);
-    if (c === "Positive") positiveCount++;
-    else if (c === "Negative") negativeCount++;
-    else zeroCount++;
-  }
+  // Tenure-based counts (only rows with NR data)
+  const withNR = rows.filter(r => r.totalNR !== null);
+  const totalPositive      = withNR.filter(r => r.totalNR! > 0).length;
+  const positiveWithin4    = withNR.filter(r => r.totalNR! > 0 && r.tenureMonths <= 4).length;
+  const negativeWithin4    = withNR.filter(r => r.totalNR! < 0 && r.tenureMonths <= 4).length;
+  const negativeBeyond4    = withNR.filter(r => r.totalNR! < 0 && r.tenureMonths > 4).length;
+
+  const totalNegative = withNR.filter(r => r.totalNR! < 0).length;
 
   const pieData = [
-    { name: "Positive", value: positiveCount, color: PIE_COLORS.Positive },
-    { name: "Negative", value: negativeCount, color: PIE_COLORS.Negative },
-    { name: "Zero",     value: zeroCount,     color: PIE_COLORS.Zero     },
+    { name: "Positive", value: totalPositive,  color: "#f59e0b" },
+    { name: "Negative", value: totalNegative,  color: "#ef4444" },
   ].filter(d => d.value > 0);
+
+  const statCards = [
+    {
+      label: "Total Positive ROI",
+      desc: "CSMs with positive NR",
+      count: totalPositive,
+      bg: "from-amber-400 to-yellow-500",
+    },
+    {
+      label: "Positive ROI ≤ 4 mo",
+      desc: "New joiners already in positive",
+      count: positiveWithin4,
+      bg: "from-emerald-500 to-teal-600",
+    },
+    {
+      label: "Negative ROI ≤ 4 mo",
+      desc: "New joiners still developing",
+      count: negativeWithin4,
+      bg: "from-orange-400 to-amber-600",
+    },
+    {
+      label: "Negative ROI > 4 mo",
+      desc: "CSMs yet to turn positive",
+      count: negativeBeyond4,
+      bg: "from-red-500 to-rose-600",
+    },
+  ];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -92,19 +106,15 @@ export default function ROIPage() {
         <p className="text-sm text-gray-500 mt-0.5">Current total net revenue per CSM</p>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4 stagger">
-        {(["Positive", "Negative", "Zero"] as const).map(k => {
-          const count = k === "Positive" ? positiveCount : k === "Negative" ? negativeCount : zeroCount;
-          const cfg = CARD_CONFIG[k];
-          return (
-            <div key={k} className={`bg-gradient-to-br ${cfg.bg} rounded-2xl p-5 text-white shadow-lg card-hover`}>
-              <div className="text-xs font-medium text-white/70 mb-2">{cfg.label}</div>
-              <div className="text-4xl font-black">{count}</div>
-              <div className="text-xs text-white/60 mt-1">{cfg.desc}</div>
-            </div>
-          );
-        })}
+      {/* Stat cards — 4 tenure-based */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
+        {statCards.map(c => (
+          <div key={c.label} className={`bg-gradient-to-br ${c.bg} rounded-2xl p-5 text-white shadow-lg card-hover`}>
+            <div className="text-xs font-medium text-white/70 mb-2">{c.label}</div>
+            <div className="text-4xl font-black">{c.count}</div>
+            <div className="text-xs text-white/60 mt-1">{c.desc}</div>
+          </div>
+        ))}
       </div>
 
       {/* Table */}
@@ -114,7 +124,6 @@ export default function ROIPage() {
           <div className="flex gap-4 text-xs text-gray-400">
             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />Positive</span>
             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" />Negative</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-gray-700 inline-block" />Zero</span>
           </div>
         </div>
         <div className="overflow-x-auto">
