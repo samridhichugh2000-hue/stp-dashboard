@@ -28,6 +28,11 @@ function todayISO(): string {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
+/** Collapse all whitespace runs to a single space and lowercase */
+function normName(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 function fmtINR(v: number): string {
   const sign = v < 0 ? "-" : "";
   return `${sign}${Math.abs(v).toLocaleString("en-IN")}`;
@@ -70,7 +75,7 @@ export default function LeadsPage() {
   const njs      = useQuery(api.queries.newJoiners.list, {});
 
   const njNameSet = new Set(
-    (njs ?? []).map((n: Doc<"newJoiners">) => n.name.toLowerCase().trim())
+    (njs ?? []).map((n: Doc<"newJoiners">) => normName(n.name))
   );
 
   const [fromDate,   setFromDate]   = useState(firstOfMonth());
@@ -104,7 +109,7 @@ export default function LeadsPage() {
       const flat = raw
         .map(flattenRow)
         .filter(r =>
-          njNameSet.size === 0 || njNameSet.has(r.cce.toLowerCase().trim())
+          njNameSet.size === 0 || njNameSet.has(normName(r.cce))
         );
 
       setRows(flat);
