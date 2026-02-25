@@ -12,12 +12,39 @@ export default function NRDPage() {
   const [njId, setNjId] = useState<Id<"newJoiners"> | "all">("all");
   const njs = useQuery(api.queries.newJoiners.list, {});
   const grid = useQuery(api.queries.nr.monthlyGrid);
-  const perf = useQuery(api.queries.nr.performingCount);
+  const stats = useQuery(api.queries.nr.nrdStats);
   const firstNJ = njs?.[0]?._id;
   const activeNJ = njId !== "all" ? njId : firstNJ;
   const singleNR = useQuery(api.queries.nr.byNJ, activeNJ ? { njId: activeNJ } : "skip");
   const njNames = Object.fromEntries(njs?.map((n: Doc<"newJoiners">) => [n._id, n.name]) ?? []);
   const njIds = njs?.map((n: Doc<"newJoiners">) => n._id) ?? [];
+
+  const statCards = [
+    {
+      label: "Currently Positive",
+      value: stats?.totalPositive,
+      desc: "NJs with latest NR positive",
+      bg: "from-amber-400 to-yellow-500",
+    },
+    {
+      label: "Currently Negative",
+      value: stats?.totalNegative,
+      desc: "NJs with latest NR negative",
+      bg: "from-red-500 to-rose-600",
+    },
+    {
+      label: "Positive within 4 mo",
+      value: stats?.positiveWithin4,
+      desc: "New joiners already positive",
+      bg: "from-emerald-500 to-teal-600",
+    },
+    {
+      label: "Negative after 4 mo",
+      value: stats?.negativeAfter4,
+      desc: "NJs still negative past 4 months",
+      bg: "from-slate-600 to-gray-700",
+    },
+  ];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -34,22 +61,16 @@ export default function NRDPage() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-3 gap-4 stagger">
-        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-white shadow-lg card-hover">
-          <div className="text-xs font-medium text-white/70 mb-2">Performing (This Month)</div>
-          <div className="text-4xl font-black">{perf?.performing ?? <span className="text-white/40">—</span>}</div>
-          <div className="text-xs text-white/60 mt-1">CSMs with positive NR</div>
-        </div>
-        <div className="bg-gradient-to-br from-red-500 to-rose-600 rounded-2xl p-5 text-white shadow-lg card-hover">
-          <div className="text-xs font-medium text-white/70 mb-2">Non-Performing</div>
-          <div className="text-4xl font-black">{perf?.nonPerforming ?? <span className="text-white/40">—</span>}</div>
-          <div className="text-xs text-white/60 mt-1">CSMs with negative NR</div>
-        </div>
-        <div className="bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl p-5 text-white shadow-lg card-hover">
-          <div className="text-xs font-medium text-white/70 mb-2">Total NJs</div>
-          <div className="text-4xl font-black">{perf?.total ?? <span className="text-white/40">—</span>}</div>
-          <div className="text-xs text-white/60 mt-1">Active this month</div>
-        </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
+        {statCards.map(c => (
+          <div key={c.label} className={`bg-gradient-to-br ${c.bg} rounded-2xl p-5 text-white shadow-lg card-hover`}>
+            <div className="text-xs font-medium text-white/70 mb-2">{c.label}</div>
+            <div className="text-4xl font-black">
+              {c.value ?? <span className="text-white/40">—</span>}
+            </div>
+            <div className="text-xs text-white/60 mt-1">{c.desc}</div>
+          </div>
+        ))}
       </div>
 
       {/* Monthly NR Grid */}

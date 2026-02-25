@@ -52,6 +52,36 @@ export const performingCount = query({
   },
 });
 
+export const nrdStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("nrRecords").collect();
+    const njs = await ctx.db
+      .query("newJoiners")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .collect();
+
+    let totalPositive = 0, totalNegative = 0, positiveWithin4 = 0, negativeAfter4 = 0;
+
+    for (const nj of njs) {
+      const njRecords = all.filter((r) => r.njId === nj._id);
+      if (njRecords.length === 0) continue;
+      // Most recent month's record
+      const latest = njRecords.sort((a, b) =>
+        a.year !== b.year ? b.year - a.year : b.month - a.month
+      )[0];
+      if (latest.isPositive) {
+        totalPositive++;
+        if (nj.tenureMonths <= 4) positiveWithin4++;
+      } else {
+        totalNegative++;
+        if (nj.tenureMonths > 4) negativeAfter4++;
+      }
+    }
+    return { totalPositive, totalNegative, positiveWithin4, negativeAfter4 };
+  },
+});
+
 export const lastMonthForNJ = internalQuery({
   args: { njId: v.id("newJoiners") },
   handler: async (ctx, args) => {

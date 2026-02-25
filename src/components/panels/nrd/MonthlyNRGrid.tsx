@@ -42,7 +42,11 @@ export function MonthlyNRGrid({ records, months, njIds, njNames }: MonthlyNRGrid
                 const [yr, mo] = m.split("-").map(Number);
                 const rec = records.find(r => r.njId === njId && r.year === yr && r.month === mo);
                 if (!rec) {
-                  return <td key={m} className="py-2.5 px-2" />;
+                  return (
+                    <td key={m} className="py-2.5 px-2 text-center">
+                      <span className="text-gray-200 text-xs select-none">—</span>
+                    </td>
+                  );
                 }
                 return (
                   <td key={m} className="py-2.5 px-2 text-center">
