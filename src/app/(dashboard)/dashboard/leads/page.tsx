@@ -33,6 +33,19 @@ function normName(s: string): string {
   return s.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+function fmtDOJ(iso: string): string {
+  const d = new Date(iso + "T00:00:00");
+  return `${String(d.getDate()).padStart(2, "0")} ${MONTHS_ABBR[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function fmtTenure(months: number): string {
+  if (months < 1) return "< 1 mo";
+  if (months < 12) return `${months} mo`;
+  const yr = Math.floor(months / 12);
+  const mo = months % 12;
+  return mo > 0 ? `${yr} yr ${mo} mo` : `${yr} yr`;
+}
+
 function fmtINR(v: number): string {
   const sign = v < 0 ? "-" : "";
   return `${sign}${Math.abs(v).toLocaleString("en-IN")}`;
@@ -188,6 +201,14 @@ export default function LeadsPage() {
     (njs ?? []).map((n: Doc<"newJoiners">) => normName(n.name))
   );
 
+  // Lookup: normalized name → { joinDate, tenureMonths }
+  const njMeta = new Map(
+    (njs ?? []).map((n: Doc<"newJoiners">) => [
+      normName(n.name),
+      { joinDate: n.joinDate, tenureMonths: n.tenureMonths },
+    ])
+  );
+
   // Filter against dashboard CSMs — reactive
   const rows = allRows
     ? (njNameSet.size > 0
@@ -247,7 +268,7 @@ export default function LeadsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Leads / TAT</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Leads</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Live data from Koenig API · {rows ? `${rows.length} CSMs` : "Loading…"}
           </p>
@@ -353,6 +374,8 @@ export default function LeadsPage() {
                     <tr className="border-b-2 border-gray-100 bg-gray-50/60">
                       <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500 w-8">#</th>
                       <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500">CSM Name</th>
+                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500">DOJ</th>
+                      <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500">Tenure</th>
                       <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500">Leads Allocated</th>
                       <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500">Registration</th>
                       <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500">Conversion Rate</th>
@@ -370,6 +393,16 @@ export default function LeadsPage() {
                         <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
                         <td className="py-2.5 px-3 text-xs font-semibold text-gray-800 group-hover:text-indigo-700">
                           {row.cce}
+                        </td>
+                        <td className="py-2.5 px-3 text-xs text-gray-500 whitespace-nowrap">
+                          {njMeta.get(normName(row.cce))?.joinDate
+                            ? fmtDOJ(njMeta.get(normName(row.cce))!.joinDate)
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="py-2.5 px-3 text-xs text-gray-500 whitespace-nowrap">
+                          {njMeta.get(normName(row.cce))?.tenureMonths !== undefined
+                            ? fmtTenure(njMeta.get(normName(row.cce))!.tenureMonths)
+                            : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="py-2.5 px-3 text-right text-xs font-semibold text-indigo-600 tabular-nums">
                           {row.leads}

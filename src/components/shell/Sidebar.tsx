@@ -43,7 +43,7 @@ const navItems: NavItem[] = [
     color: "from-violet-400 to-violet-600",
   },
   {
-    label: "Leads / TAT",
+    label: "Leads",
     href: "/dashboard/leads",
     icon: <Users2 size={17} />,
     roles: ["admin", "manager", "viewer"],
