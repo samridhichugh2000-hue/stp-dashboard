@@ -70,7 +70,6 @@ export const syncGoogleSheets = internalAction({
           empId: nj.empId,
           name: nj.name,
           department: nj.department,
-          designation: nj.designation,
           managerName: nj.managerName,
           location: nj.location,
           email: nj.email,

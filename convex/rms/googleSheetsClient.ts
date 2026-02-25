@@ -165,10 +165,9 @@ export class GoogleSheetsRMSClient implements RMSClient {
     const { headers, dataRows } = await this.fetchRows();
 
     // Locate special columns by header name
-    const statusIdx      = headers.findIndex((h) => h.toLowerCase().trim() === "status");
-    const claimedIdx     = headers.findIndex((h) => h.toLowerCase().trim().startsWith("claimed"));
-    const nrCorpIdx      = headers.findIndex((h) => h.toLowerCase().includes("nr from corp"));
-    const designationIdx = headers.findIndex((h) => h.toLowerCase().trim() === "designation");
+    const statusIdx   = headers.findIndex((h) => h.toLowerCase().trim() === "status");
+    const claimedIdx  = headers.findIndex((h) => h.toLowerCase().trim().startsWith("claimed"));
+    const nrCorpIdx   = headers.findIndex((h) => h.toLowerCase().includes("nr from corp"));
 
     const results: NJRecord[] = [];
     for (const row of dataRows) {
@@ -180,13 +179,10 @@ export class GoogleSheetsRMSClient implements RMSClient {
       const claimedRaw = claimedIdx >= 0 ? parseNRValue(row[claimedIdx] ?? "") : null;
       const nrCorpRaw  = nrCorpIdx  >= 0 ? parseNRValue(row[nrCorpIdx]  ?? "") : null;
 
-      const designation = designationIdx >= 0 ? row[designationIdx]?.trim() : undefined;
-
       results.push({
         empId,
         name,
         department: row[2]?.trim() || "Sales",
-        designation: designation || undefined,
         managerName: row[3]?.trim() || "",
         location: row[4]?.trim() || "",
         joinDate: parseDOJ(row[5]?.trim() || ""),

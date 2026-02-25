@@ -7,7 +7,6 @@ export default defineSchema({
     name: v.string(),
     empId: v.optional(v.string()),              // Google Sheets employee ID
     department: v.optional(v.string()),         // e.g. "Sales"
-    designation: v.optional(v.string()),        // Job title from Google Sheet
     location: v.optional(v.string()),           // Base location
     email: v.optional(v.string()),              // Work email
     claimedCorporates: v.optional(v.number()), // Count from "Claimed" column
