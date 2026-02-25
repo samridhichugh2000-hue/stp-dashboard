@@ -5,7 +5,6 @@ import { useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Doc, Id } from "@/../convex/_generated/dataModel";
 import { HuddleLog } from "@/components/panels/overview/HuddleLog";
-import { DayTaskTracker } from "@/components/panels/overview/DayTaskTracker";
 import { Users, UserCheck, UserX } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -140,7 +139,7 @@ export default function OverviewPage() {
 
               {/* Profile card */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                {/* Avatar + name */}
+                {/* Avatar + bold name */}
                 <div className="flex items-center gap-4 mb-6 pb-5 border-b border-gray-100">
                   <div className={clsx(
                     "w-14 h-14 rounded-2xl bg-gradient-to-br flex items-center justify-center text-white text-lg font-bold shadow-sm flex-shrink-0",
@@ -156,20 +155,15 @@ export default function OverviewPage() {
                   </div>
                 </div>
 
-                {/* Detail fields grid */}
+                {/* Detail fields grid — order: Department, Designation, Manager, Email ID, Emp ID, Location */}
                 <div className="grid grid-cols-2 gap-x-10 gap-y-5">
                   <DetailField label="Department"  value={selected.department} />
-                  <DetailField label="Designation" value={selected.designation} />
+                  <DetailField label="Designation" value={(selected as Record<string, unknown>).designation as string | undefined} />
                   <DetailField label="Manager"     value={selected.managerId} />
                   <DetailField label="Email ID"    value={selected.email} />
-                  <DetailField label="Location"    value={selected.location} />
                   <DetailField label="Emp ID"      value={selected.empId} />
+                  <DetailField label="Location"    value={selected.location} />
                 </div>
-              </div>
-
-              {/* Task tracker */}
-              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-                <DayTaskTracker />
               </div>
 
               {/* Huddle log */}
