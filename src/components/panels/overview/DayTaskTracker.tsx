@@ -10,11 +10,11 @@ interface Task {
 }
 
 const DAILY_TASKS: Task[] = [
-  { id: "qubit_call", label: "Qubit recorded call", completed: false, required: true },
-  { id: "lead_followup", label: "Lead follow-up logged", completed: false, required: true },
-  { id: "huddle", label: "Huddle session", completed: false, required: true },
-  { id: "nr_update", label: "NR pipeline updated", completed: false, required: false },
-  { id: "rcb_claim", label: "RCB claim submitted", completed: false, required: false },
+  { id: "huddle",      label: "Huddle completed",          completed: false, required: true },
+  { id: "qubits",     label: "Qubits of the day completed", completed: false, required: true },
+  { id: "dsr",        label: "DSR received",               completed: false, required: true },
+  { id: "nr_numbers", label: "Current NR numbers",         completed: false, required: true },
+  { id: "roi_numbers",label: "Current ROI numbers",        completed: false, required: true },
 ];
 
 export function DayTaskTracker() {
