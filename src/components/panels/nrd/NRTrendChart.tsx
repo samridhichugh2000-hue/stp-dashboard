@@ -28,10 +28,10 @@ export function NRTrendChart({ records }: NRTrendChartProps) {
         />
         <Tooltip
           contentStyle={{fontSize:12,borderRadius:8}}
-          formatter={(v: number) => [
-            `${v < 0 ? "-" : ""}${Math.abs(v).toLocaleString("en-IN")}`,
-            "NR Value"
-          ]}
+          formatter={(v: unknown) => {
+            const n = v as number;
+            return [`${n < 0 ? "-" : ""}${Math.abs(n).toLocaleString("en-IN")}`, "NR Value"] as [string, string];
+          }}
         />
         <ReferenceLine y={0} stroke="#d1d5db" />
         <Bar dataKey="value" radius={[4,4,0,0]}>

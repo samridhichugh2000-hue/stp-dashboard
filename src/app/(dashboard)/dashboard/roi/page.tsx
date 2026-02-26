@@ -179,7 +179,7 @@ export default function ROIPage() {
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                activeIndex={activeIdx}
+                {...({ activeIndex: activeIdx } as object)}
                 activeShape={renderActiveShape as never}
                 data={pieData}
                 cx="50%"

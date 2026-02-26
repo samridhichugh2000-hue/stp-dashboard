@@ -161,7 +161,7 @@ export default function RCBPage() {
                 <ReferenceLine x={0} stroke="#e5e7eb" strokeWidth={1.5} />
                 <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={22} label={{
                   position: "right",
-                  formatter: (v: number) => fmtAxisINR(v),
+                  formatter: (v: unknown) => fmtAxisINR(v as number),
                   fontSize: 10,
                   fill: "#6b7280",
                 }}>

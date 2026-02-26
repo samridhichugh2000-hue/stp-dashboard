@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, RefreshCw, ChevronDown, Wifi, WifiOff } from "lucide-react";
+import { Bell, RefreshCw, ChevronDown, Menu } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
@@ -10,6 +10,7 @@ interface TopBarProps {
   userName: string;
   userRole: string;
   onRefresh?: () => void;
+  onMobileNavOpen?: () => void;
 }
 
 const ROLE_COLORS: Record<string, string> = {
@@ -35,7 +36,7 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
-export function TopBar({ userName, userRole, onRefresh }: TopBarProps) {
+export function TopBar({ userName, userRole, onRefresh, onMobileNavOpen }: TopBarProps) {
   const [refreshing, setRefreshing] = useState(false);
   const syncLogs = useQuery(api.queries.syncLogs.latestByModule);
 
@@ -86,20 +87,30 @@ export function TopBar({ userName, userRole, onRefresh }: TopBarProps) {
   };
 
   return (
-    <header className="flex items-center justify-between px-6 py-3 bg-white/80 backdrop-blur-sm border-b border-gray-200/70 sticky top-0 z-10 no-print shadow-sm">
-      {/* Left: date */}
-      <div className="flex items-center gap-3">
-        <div>
+    <header className="flex items-center justify-between px-4 md:px-6 py-3 bg-white/80 backdrop-blur-sm border-b border-gray-200/70 sticky top-0 z-10 no-print shadow-sm">
+      {/* Left: hamburger (mobile) + date (desktop) */}
+      <div className="flex items-center gap-2 md:gap-3">
+        {/* Hamburger — mobile only */}
+        <button
+          onClick={onMobileNavOpen}
+          className="md:hidden p-2 rounded-xl text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+          aria-label="Open menu"
+        >
+          <Menu size={18} />
+        </button>
+
+        {/* Date — hidden on small screens */}
+        <div className="hidden sm:block">
           <div className="text-sm font-medium text-gray-900">{today.split(",")[0]},</div>
           <div className="text-xs text-gray-500 -mt-0.5">{today.split(",").slice(1).join(",").trim()}</div>
         </div>
       </div>
 
       {/* Right: sync + refresh + alerts + user */}
-      <div className="flex items-center gap-3">
-        {/* Sync status chip */}
+      <div className="flex items-center gap-2 md:gap-3">
+        {/* Sync status chip — hidden on xs */}
         <div
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${syncColors[syncStatus]}`}
+          className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${syncColors[syncStatus]}`}
         >
           <span className={`w-1.5 h-1.5 rounded-full ${syncDotColors[syncStatus]}`} />
           {hasError
@@ -110,6 +121,12 @@ export function TopBar({ userName, userRole, onRefresh }: TopBarProps) {
             ? `Synced ${formatSync(lastSync)}`
             : "Awaiting sync"}
         </div>
+
+        {/* Sync dot — xs only */}
+        <span
+          className={`sm:hidden w-2 h-2 rounded-full ${syncDotColors[syncStatus]}`}
+          title={hasError ? "Sync error" : isRunning ? "Syncing" : "Synced"}
+        />
 
         {/* Refresh button */}
         <button
@@ -133,7 +150,7 @@ export function TopBar({ userName, userRole, onRefresh }: TopBarProps) {
         <div className="w-px h-7 bg-gray-200" />
 
         {/* User chip */}
-        <div className="flex items-center gap-2.5 cursor-pointer group">
+        <div className="flex items-center gap-2 cursor-pointer group">
           <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold shadow-sm">
             {getInitials(userName)}
           </div>
