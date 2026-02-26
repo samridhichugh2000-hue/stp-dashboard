@@ -9,10 +9,13 @@ import { HuddleLog } from "@/components/panels/overview/HuddleLog";
 import { DayTaskTracker } from "@/components/panels/overview/DayTaskTracker";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { StatCard } from "@/components/shared/StatCard";
-import { Users, CheckCircle2, Activity } from "lucide-react";
+import { Users, CheckCircle2, Activity, Search, X, Building2, MapPin, Mail, BadgeCheck, Hash, UserCircle2, CalendarDays, Clock } from "lucide-react";
 
 export default function OverviewPage() {
   const [selectedNJ, setSelectedNJ] = useState<Id<"newJoiners"> | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchedNJId, setSearchedNJId] = useState<Id<"newJoiners"> | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const njs = useQuery(api.queries.newJoiners.list, {});
   const alerts = useQuery(api.queries.performance.pendingAlerts);
   const summary = useQuery(api.queries.performance.dashboardSummary);
@@ -116,6 +119,113 @@ export default function OverviewPage() {
           })}
         </div>
       </div>
+
+      {/* ── CSM Search + Profile ────────────────────────────────────────── */}
+      {(() => {
+        const filtered = searchQuery.trim().length > 0
+          ? activeNJ.filter((n: Doc<"newJoiners">) =>
+              n.name.toLowerCase().includes(searchQuery.toLowerCase())
+            )
+          : [];
+        const searchedNJ = searchedNJId ? activeNJ.find((n: Doc<"newJoiners">) => n._id === searchedNJId) : null;
+
+        const fmtDOJ = (iso: string) =>
+          new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+        const fmtTenure = (m: number) => {
+          if (m < 1) return "< 1 month";
+          if (m < 12) return `${m} month${m !== 1 ? "s" : ""}`;
+          const yr = Math.floor(m / 12), mo = m % 12;
+          return mo > 0 ? `${yr} yr ${mo} mo` : `${yr} yr`;
+        };
+
+        const profileFields = searchedNJ ? [
+          { icon: <Hash size={14} />,         label: "Emp ID",      value: searchedNJ.empId },
+          { icon: <UserCircle2 size={14} />,  label: "Manager",     value: searchedNJ.managerId },
+          { icon: <MapPin size={14} />,       label: "Location",    value: searchedNJ.location },
+          { icon: <Building2 size={14} />,    label: "Department",  value: searchedNJ.department },
+          { icon: <BadgeCheck size={14} />,   label: "Designation", value: searchedNJ.designation },
+          { icon: <Mail size={14} />,         label: "Email",       value: searchedNJ.email },
+          { icon: <CalendarDays size={14} />, label: "DOJ",         value: fmtDOJ(searchedNJ.joinDate) },
+          { icon: <Clock size={14} />,        label: "Tenure",      value: fmtTenure(searchedNJ.tenureMonths) },
+        ] : [];
+
+        return (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">CSM Lookup</p>
+
+            {/* Search input */}
+            <div className="relative">
+              <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-indigo-300 focus-within:border-indigo-400 transition-all bg-gray-50">
+                <Search size={15} className="text-gray-400 flex-shrink-0" />
+                <input
+                  type="text"
+                  placeholder="Search CSM by name…"
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setDropdownOpen(true); }}
+                  onFocus={() => setDropdownOpen(true)}
+                  onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
+                  className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none"
+                />
+                {(searchQuery || searchedNJ) && (
+                  <button onClick={() => { setSearchQuery(""); setSearchedNJId(null); setDropdownOpen(false); }}>
+                    <X size={14} className="text-gray-400 hover:text-gray-600" />
+                  </button>
+                )}
+              </div>
+
+              {/* Dropdown */}
+              {dropdownOpen && filtered.length > 0 && (
+                <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                  {filtered.slice(0, 8).map((n: Doc<"newJoiners">) => (
+                    <button
+                      key={n._id}
+                      onMouseDown={() => {
+                        setSearchedNJId(n._id);
+                        setSearchQuery(n.name);
+                        setDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center gap-2"
+                    >
+                      <span className="font-medium">{n.name}</span>
+                      {n.designation && <span className="text-xs text-gray-400">· {n.designation}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Profile card */}
+            {searchedNJ && (
+              <div className="animate-scale-in border border-indigo-100 rounded-xl overflow-hidden">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-indigo-600 to-violet-700 px-5 py-4 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                    {searchedNJ.name.split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-white font-bold text-sm">{searchedNJ.name}</p>
+                    {searchedNJ.designation && <p className="text-indigo-200 text-xs mt-0.5">{searchedNJ.designation}</p>}
+                  </div>
+                </div>
+                {/* Fields grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-gray-100">
+                  {profileFields.map(({ icon, label, value }) => (
+                    <div key={label} className="bg-white px-4 py-3">
+                      <div className="flex items-center gap-1.5 text-gray-400 mb-1">
+                        {icon}
+                        <span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-800 truncate">
+                        {value || <span className="text-gray-300">—</span>}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── NJ List + Detail panel ──────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
