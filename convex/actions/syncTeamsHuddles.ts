@@ -181,9 +181,10 @@ export const syncTeamsHuddles = internalAction({
       // 6. Build date → [{ subject, eventId }] lookup
       const eventsByDate: Record<string, Array<{ subject: string; id: string }>> = {};
       for (const ev of events) {
+        if (!ev.start?.dateTime) continue;
         const evDate = ev.start.dateTime.split("T")[0];
         if (!eventsByDate[evDate]) eventsByDate[evDate] = [];
-        eventsByDate[evDate].push({ subject: ev.subject.toLowerCase(), id: ev.id });
+        eventsByDate[evDate].push({ subject: (ev.subject ?? "").toLowerCase(), id: ev.id });
       }
 
       // 7. Upsert huddle logs for each NJ × expected date
