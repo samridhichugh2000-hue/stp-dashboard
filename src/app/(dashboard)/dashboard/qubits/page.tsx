@@ -29,8 +29,10 @@ export default function QubitsPage() {
     );
   }
 
-  const csmsWithQubits   = summary.filter((r) => r.totalSessions > 0).length;
-  const csmsPending      = summary.filter((r) => r.totalSessions === 0).length;
+  // Position-based status: rows 1–21 and 23–25 (0-indexed: 0–20, 22–24) = Completed; rest = Pending
+  function qubitStatus(idx: number): "Completed" | "Pending" {
+    return (idx <= 20 || (idx >= 22 && idx <= 24)) ? "Completed" : "Pending";
+  }
 
   const selectedCSM      = selectedNJId ? summary.find((r) => r._id === selectedNJId) : null;
   const totalCompleted   = scores?.length ?? 0;
@@ -52,20 +54,17 @@ export default function QubitsPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Qubits</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Call quality training scores per CSM</p>
       </div>
 
       {/* ── Top stat cards ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 stagger">
         <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-white shadow-lg card-hover">
           <div className="text-xs font-medium text-white/70 mb-2">CSMs Completed Qubits</div>
-          <div className="text-4xl font-black">{csmsWithQubits}</div>
-          <div className="text-xs text-white/60 mt-1">Have at least one session recorded</div>
+          <div className="text-4xl font-black">24</div>
         </div>
         <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl p-5 text-white shadow-lg card-hover">
           <div className="text-xs font-medium text-white/70 mb-2">CSMs Qubits Pending</div>
-          <div className="text-4xl font-black">{csmsPending}</div>
-          <div className="text-xs text-white/60 mt-1">No sessions recorded yet</div>
+          <div className="text-4xl font-black">5</div>
         </div>
       </div>
 
@@ -96,21 +95,25 @@ export default function QubitsPage() {
             </div>
             {dropdownOpen && filtered.length > 0 && (
               <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                {filtered.slice(0, 8).map((r) => (
-                  <button
-                    key={r._id}
-                    onMouseDown={() => selectCSM(r._id, r.name)}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center justify-between"
-                  >
-                    <span className="font-medium">{r.name}</span>
-                    <span className={clsx(
-                      "text-[10px] font-semibold px-2 py-0.5 rounded-full",
-                      r.totalSessions > 0 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                    )}>
-                      {r.totalSessions > 0 ? "Active" : "Pending"}
-                    </span>
-                  </button>
-                ))}
+                {filtered.slice(0, 8).map((r) => {
+                  const idx = summary.findIndex((s) => s._id === r._id);
+                  const status = qubitStatus(idx);
+                  return (
+                    <button
+                      key={r._id}
+                      onMouseDown={() => selectCSM(r._id, r.name)}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center justify-between"
+                    >
+                      <span className="font-medium">{r.name}</span>
+                      <span className={clsx(
+                        "text-[10px] font-semibold px-2 py-0.5 rounded-full",
+                        status === "Completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                      )}>
+                        {status}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -128,38 +131,37 @@ export default function QubitsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {summary.map((row, i) => (
-                  <tr
-                    key={row._id}
-                    onClick={() => selectCSM(row._id, row.name)}
-                    className={clsx(
-                      "cursor-pointer transition-colors group",
-                      selectedNJId === row._id
-                        ? "bg-indigo-50"
-                        : "hover:bg-gray-50/60"
-                    )}
-                  >
-                    <td className="py-2.5 px-4 text-xs text-gray-300">{i + 1}</td>
-                    <td className="py-2.5 px-4">
-                      <p className={clsx("text-xs font-semibold", selectedNJId === row._id ? "text-indigo-700" : "text-gray-800")}>{row.name}</p>
-                      {row.designation && <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>}
-                    </td>
-                    <td className="py-2.5 px-4 text-xs text-gray-500">{row.empId ?? "—"}</td>
-                    <td className="py-2.5 px-4 text-center">
-                      <span className={clsx(
-                        "inline-block text-[10px] font-semibold px-2.5 py-1 rounded-full",
-                        row.totalSessions > 0
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-amber-100 text-amber-700"
-                      )}>
-                        {row.totalSessions > 0 ? "Active" : "Pending"}
-                      </span>
-                    </td>
-                    <td className="py-2.5 px-2 text-right">
-                      <ChevronRight size={14} className={clsx("transition-colors", selectedNJId === row._id ? "text-indigo-400" : "text-gray-200 group-hover:text-gray-400")} />
-                    </td>
-                  </tr>
-                ))}
+                {summary.map((row, i) => {
+                  const status = qubitStatus(i);
+                  return (
+                    <tr
+                      key={row._id}
+                      onClick={() => selectCSM(row._id, row.name)}
+                      className={clsx(
+                        "cursor-pointer transition-colors group",
+                        selectedNJId === row._id ? "bg-indigo-50" : "hover:bg-gray-50/60"
+                      )}
+                    >
+                      <td className="py-2.5 px-4 text-xs text-gray-300">{i + 1}</td>
+                      <td className="py-2.5 px-4">
+                        <p className={clsx("text-xs font-semibold", selectedNJId === row._id ? "text-indigo-700" : "text-gray-800")}>{row.name}</p>
+                        {row.designation && <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>}
+                      </td>
+                      <td className="py-2.5 px-4 text-xs text-gray-500">{row.empId ?? "—"}</td>
+                      <td className="py-2.5 px-4 text-center">
+                        <span className={clsx(
+                          "inline-block text-[10px] font-semibold px-2.5 py-1 rounded-full",
+                          status === "Completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                        )}>
+                          {status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-2 text-right">
+                        <ChevronRight size={14} className={clsx("transition-colors", selectedNJId === row._id ? "text-indigo-400" : "text-gray-200 group-hover:text-gray-400")} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
