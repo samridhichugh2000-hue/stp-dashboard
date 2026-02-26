@@ -2,29 +2,26 @@
 
 import { clsx } from "clsx";
 
-interface Task {
-  id: string;
-  label: string;
-  completed: boolean;
-  required: boolean;
+interface DayTaskTrackerProps {
+  huddleCompleted?: boolean;
 }
 
-const DAILY_TASKS: Task[] = [
-  { id: "huddle", label: "Huddle completed",           completed: false, required: true },
-  { id: "qubits", label: "Qubits of the day completed", completed: false, required: true },
-  { id: "dsr",    label: "DSR received",               completed: false, required: true },
-];
+export function DayTaskTracker({ huddleCompleted = false }: DayTaskTrackerProps) {
+  const tasks = [
+    { id: "huddle", label: "Huddle completed",            completed: huddleCompleted, required: true },
+    { id: "qubits", label: "Qubits of the day completed", completed: false,           required: true },
+    { id: "dsr",    label: "DSR received",                completed: false,           required: true },
+  ];
 
-export function DayTaskTracker() {
-  const completed = DAILY_TASKS.filter((t) => t.completed).length;
-  const total = DAILY_TASKS.length;
-  const pct = Math.round((completed / total) * 100);
+  const completedCount = tasks.filter((t) => t.completed).length;
+  const total = tasks.length;
+  const pct = Math.round((completedCount / total) * 100);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-gray-700">Today's Tasks</h3>
-        <span className="text-xs text-gray-400">{completed}/{total}</span>
+        <span className="text-xs text-gray-400">{completedCount}/{total}</span>
       </div>
       {/* Progress bar */}
       <div className="h-1.5 bg-gray-100 rounded-full mb-3" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
@@ -34,7 +31,7 @@ export function DayTaskTracker() {
         />
       </div>
       <div className="space-y-1.5">
-        {DAILY_TASKS.map((task) => (
+        {tasks.map((task) => (
           <div key={task.id} className="flex items-center gap-2 text-sm">
             <div
               className={clsx(

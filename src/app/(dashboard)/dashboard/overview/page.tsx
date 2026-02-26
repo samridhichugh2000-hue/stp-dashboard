@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Doc, Id } from "@/../convex/_generated/dataModel";
+const TODAY = new Date().toISOString().split("T")[0];
 import { NJCard } from "@/components/panels/overview/NJCard";
 import { HuddleLog } from "@/components/panels/overview/HuddleLog";
 import { DayTaskTracker } from "@/components/panels/overview/DayTaskTracker";
@@ -19,6 +20,8 @@ export default function OverviewPage() {
   const njs = useQuery(api.queries.newJoiners.list, {});
   const alerts = useQuery(api.queries.performance.pendingAlerts);
   const summary = useQuery(api.queries.performance.dashboardSummary);
+  const huddleLogs = useQuery(api.queries.huddleLogs.byNJ, selectedNJ ? { njId: selectedNJ } : "skip");
+  const huddleCompleted = huddleLogs?.some((log: Doc<"huddleLogs">) => log.date === TODAY && log.completed) ?? false;
 
   // Loading skeleton
   if (!njs || !summary) {
@@ -284,7 +287,7 @@ export default function OverviewPage() {
               </div>
 
               <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-                <DayTaskTracker />
+                <DayTaskTracker huddleCompleted={huddleCompleted} />
               </div>
               <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                 <HuddleLog njId={selectedNJ} />
