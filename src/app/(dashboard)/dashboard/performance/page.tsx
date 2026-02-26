@@ -28,14 +28,16 @@ function fmtTenure(months: number): string {
   return mo > 0 ? `${yr} yr ${mo} mo` : `${yr} yr`;
 }
 
-function computeDev(nr: NRROIStatus, roi: NRROIStatus): boolean | null {
-  if (!nr && !roi) return null;
-  return nr === "Positive" && roi === "Positive";
+function computeDev(nrPositiveMonth: number | null, roiStatus: NRROIStatus, nrStatus: NRROIStatus): boolean | null {
+  if (!roiStatus && !nrStatus) return null;
+  // Developed: ROI positive AND NR was positive within first 4 months OR is currently positive
+  const nrPositive = nrPositiveMonth !== null || nrStatus === "Positive";
+  return roiStatus === "Positive" && nrPositive;
 }
 
-function computeAction(nr: NRROIStatus, roi: NRROIStatus, tenure: number): string | null {
-  if (!nr && !roi) return null;
-  if (nr === "Positive" && roi === "Positive") return "On Track";
+function computeAction(dev: boolean | null, tenure: number): string | null {
+  if (dev === null) return null;
+  if (dev) return "On Track";
   return tenure > 4 ? "PA/PIP Suggested" : "Under Observation";
 }
 
@@ -52,6 +54,14 @@ function Pill({ label, palette }: { label: string; palette: typeof P_GREEN }) {
 
 function NRROIBadge({ status }: { status: NRROIStatus }) {
   if (!status) return <span className="text-gray-300 text-xs select-none">—</span>;
+  return <Pill label={status} palette={status === "Positive" ? P_GREEN : P_RED} />;
+}
+
+function NRStatusBadge({ status, positiveMonth }: { status: NRROIStatus; positiveMonth: number | null }) {
+  if (!status) return <span className="text-gray-300 text-xs select-none">—</span>;
+  if (positiveMonth !== null) {
+    return <Pill label={`Positive within ${positiveMonth} mo`} palette={P_GREEN} />;
+  }
   return <Pill label={status} palette={status === "Positive" ? P_GREEN : P_RED} />;
 }
 
@@ -99,11 +109,14 @@ export default function PerformancePage() {
   const [activeIdx, setActiveIdx] = useState(0);
   const rows = useQuery(api.queries.performance.njPerformanceStatus);
 
-  const enriched = rows?.map(row => ({
-    ...row,
-    dev: computeDev(row.nrStatus, row.roiStatus),
-    suggestedAction: computeAction(row.nrStatus, row.roiStatus, row.tenureMonths),
-  }));
+  const enriched = rows?.map(row => {
+    const dev = computeDev(row.nrPositiveMonth, row.roiStatus, row.nrStatus);
+    return {
+      ...row,
+      dev,
+      suggestedAction: computeAction(dev, row.tenureMonths),
+    };
+  });
 
   const devCount    = enriched?.filter(r => r.dev === true).length  ?? 0;
   const notDevCount = enriched?.filter(r => r.dev === false).length ?? 0;
@@ -184,7 +197,7 @@ export default function PerformancePage() {
                       {row.designation && <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>}
                     </td>
                     <td className="py-2.5 px-3 text-xs text-gray-400">{fmtTenure(row.tenureMonths)}</td>
-                    <td className="py-2.5 px-3 text-center"><NRROIBadge status={row.nrStatus} /></td>
+                    <td className="py-2.5 px-3 text-center"><NRStatusBadge status={row.nrStatus} positiveMonth={row.nrPositiveMonth} /></td>
                     <td className="py-2.5 px-3 text-center"><NRROIBadge status={row.roiStatus} /></td>
                     <td className="py-2.5 px-3 text-right text-xs font-semibold text-gray-700 tabular-nums">
                       {row.claimedCorporates > 0 ? row.claimedCorporates : <span className="text-gray-300">—</span>}

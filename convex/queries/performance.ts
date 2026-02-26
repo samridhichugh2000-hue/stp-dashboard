@@ -14,16 +14,36 @@ export const njPerformanceStatus = query({
       .map((nj) => {
         const records = allNR.filter((r) => r.njId === nj._id);
         let nrStatus: "Positive" | "Negative" | null = null;
+        let nrPositiveMonth: number | null = null; // earliest tenure month (1–4) where NR was positive
         let roiStatus: "Positive" | "Negative" | null = null;
 
         if (records.length > 0) {
-          const latest = records.sort((a, b) =>
+          // Latest NR status
+          const latest = [...records].sort((a, b) =>
             a.year !== b.year ? b.year - a.year : b.month - a.month
           )[0];
           nrStatus = latest.isPositive ? "Positive" : "Negative";
 
+          // Total NR → ROI
           const total = records.reduce((s, r) => s + r.nrValue, 0);
           roiStatus = total > 0 ? "Positive" : "Negative";
+
+          // Find earliest month within first 4 tenure months where NR was positive
+          const joinDate = new Date(nj.joinDate);
+          const joinYear = joinDate.getFullYear();
+          const joinMonth = joinDate.getMonth() + 1; // 1-indexed
+
+          const positiveEarly = records
+            .map((r) => ({
+              ...r,
+              tenureMonth: (r.year - joinYear) * 12 + (r.month - joinMonth),
+            }))
+            .filter((r) => r.isPositive && r.tenureMonth >= 1 && r.tenureMonth <= 4)
+            .sort((a, b) => a.tenureMonth - b.tenureMonth);
+
+          if (positiveEarly.length > 0) {
+            nrPositiveMonth = positiveEarly[0].tenureMonth;
+          }
         }
 
         return {
@@ -32,6 +52,7 @@ export const njPerformanceStatus = query({
           designation: nj.designation,
           tenureMonths: nj.tenureMonths,
           nrStatus,
+          nrPositiveMonth,
           roiStatus,
           claimedCorporates: nj.claimedCorporates ?? 0,
         };
