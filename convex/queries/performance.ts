@@ -29,6 +29,7 @@ export const njPerformanceStatus = query({
         return {
           _id: nj._id,
           name: nj.name,
+          designation: nj.designation,
           tenureMonths: nj.tenureMonths,
           nrStatus,
           roiStatus,

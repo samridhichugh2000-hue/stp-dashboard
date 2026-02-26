@@ -15,6 +15,7 @@ export const allCorpSummary = query({
       .map((nj) => ({
         _id: nj._id,
         name: nj.name,
+        designation: nj.designation,
         tenureMonths: nj.tenureMonths,
         claimedCorporates: nj.claimedCorporates ?? null,
         nrFromCorporates: nj.nrFromCorporates ?? null,

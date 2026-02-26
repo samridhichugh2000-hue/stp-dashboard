@@ -206,7 +206,7 @@ export default function LeadsPage() {
   const njMeta = new Map(
     (njs ?? []).map((n: Doc<"newJoiners">) => [
       normName(n.name),
-      { joinDate: n.joinDate, tenureMonths: n.tenureMonths },
+      { joinDate: n.joinDate, tenureMonths: n.tenureMonths, designation: n.designation },
     ])
   );
 
@@ -394,8 +394,11 @@ export default function LeadsPage() {
                         className="hover:bg-indigo-50/30 transition-colors group cursor-pointer"
                       >
                         <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
-                        <td className="py-2.5 px-3 text-xs font-semibold text-gray-800 group-hover:text-indigo-700">
-                          {row.cce}
+                        <td className="py-2.5 px-3">
+                          <p className="text-xs font-semibold text-gray-800 group-hover:text-indigo-700">{row.cce}</p>
+                          {njMeta.get(normName(row.cce))?.designation && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">{njMeta.get(normName(row.cce))!.designation}</p>
+                          )}
                         </td>
                         <td className="py-2.5 px-3 text-xs text-gray-500 whitespace-nowrap">
                           {njMeta.get(normName(row.cce))?.joinDate

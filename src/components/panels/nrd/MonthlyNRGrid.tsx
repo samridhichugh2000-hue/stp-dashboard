@@ -1,7 +1,7 @@
 "use client";
 import { clsx } from "clsx";
 interface NRRecord { _id:string; njId:string; month:number; year:number; nrValue:number; isPositive:boolean; }
-interface MonthlyNRGridProps { records: NRRecord[]; months: string[]; njIds: string[]; njNames: Record<string,string>; }
+interface MonthlyNRGridProps { records: NRRecord[]; months: string[]; njIds: string[]; njNames: Record<string,string>; njDesignations?: Record<string,string>; }
 
 /** Exact number with Indian comma grouping: 437096 → 4,37,096 */
 function formatINR(v: number): string {
@@ -16,7 +16,7 @@ function fmtMonth(key: string): string {
   return `${MONTHS[parseInt(m) - 1]} '${y.slice(2)}`;
 }
 
-export function MonthlyNRGrid({ records, months, njIds, njNames }: MonthlyNRGridProps) {
+export function MonthlyNRGrid({ records, months, njIds, njNames, njDesignations }: MonthlyNRGridProps) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs border-collapse">
@@ -35,8 +35,9 @@ export function MonthlyNRGrid({ records, months, njIds, njNames }: MonthlyNRGrid
         <tbody className="divide-y divide-gray-50">
           {njIds.map(njId => (
             <tr key={njId} className="hover:bg-indigo-50/30 transition-colors group">
-              <td className="py-2.5 px-3 font-semibold text-gray-700 whitespace-nowrap sticky left-0 bg-white group-hover:bg-indigo-50/30 z-10 transition-colors">
-                {njNames[njId] ?? njId}
+              <td className="py-2.5 px-3 sticky left-0 bg-white group-hover:bg-indigo-50/30 z-10 transition-colors whitespace-nowrap">
+                <p className="font-semibold text-gray-700">{njNames[njId] ?? njId}</p>
+                {njDesignations?.[njId] && <p className="text-[10px] text-gray-400 mt-0.5">{njDesignations[njId]}</p>}
               </td>
               {months.map(m => {
                 const [yr, mo] = m.split("-").map(Number);

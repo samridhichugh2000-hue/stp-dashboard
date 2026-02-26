@@ -17,6 +17,7 @@ export default function NRDPage() {
   const activeNJ = njId !== "all" ? njId : firstNJ;
   const singleNR = useQuery(api.queries.nr.byNJ, activeNJ ? { njId: activeNJ } : "skip");
   const njNames = Object.fromEntries(njs?.map((n: Doc<"newJoiners">) => [n._id, n.name]) ?? []);
+  const njDesignations = Object.fromEntries(njs?.flatMap((n: Doc<"newJoiners">) => n.designation ? [[n._id, n.designation]] : []) ?? []);
   const njIds = njs?.map((n: Doc<"newJoiners">) => n._id) ?? [];
 
   const statCards = [
@@ -74,7 +75,7 @@ export default function NRDPage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-4">Monthly NR Grid — All CSMs</h2>
         {grid
-          ? <MonthlyNRGrid records={grid.records} months={grid.months} njIds={njIds} njNames={njNames} />
+          ? <MonthlyNRGrid records={grid.records} months={grid.months} njIds={njIds} njNames={njNames} njDesignations={njDesignations} />
           : <div className="animate-pulse h-48 bg-gray-50 rounded-xl" />}
       </div>
 

@@ -142,7 +142,10 @@ export default function ROIPage() {
                   return (
                     <tr key={row._id} className="hover:bg-gray-50 transition-colors">
                       <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
-                      <td className="py-2.5 px-3 text-xs font-medium text-gray-600">{row.name}</td>
+                      <td className="py-2.5 px-3">
+                        <p className="text-xs font-medium text-gray-600">{row.name}</p>
+                        {row.designation && <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>}
+                      </td>
                       <td className="py-2.5 px-3 text-xs text-gray-400">{fmtTenure(row.tenureMonths)}</td>
                       <td className="py-2.5 px-3 text-right text-xs text-gray-300">—</td>
                     </tr>
@@ -152,7 +155,10 @@ export default function ROIPage() {
                 return (
                   <tr key={row._id} className="hover:bg-gray-50 transition-colors group">
                     <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
-                    <td className="py-2.5 px-3 text-xs font-semibold text-gray-800 group-hover:text-gray-900">{row.name}</td>
+                    <td className="py-2.5 px-3">
+                      <p className="text-xs font-semibold text-gray-800 group-hover:text-gray-900">{row.name}</p>
+                      {row.designation && <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>}
+                    </td>
                     <td className="py-2.5 px-3 text-xs text-gray-400">{fmtTenure(row.tenureMonths)}</td>
                     <td className={`py-2.5 px-3 text-right text-sm font-bold tabular-nums ${NUM_COLOR[code]}`}>
                       {fmtNumber(row.totalNR)}
