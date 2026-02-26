@@ -14,6 +14,7 @@ interface NJCardProps {
     category: string;
     tenureMonths: number;
     isActive: boolean;
+    designation?: string;
   };
   alerts?: Array<{ alertType: string; acknowledgedAt?: string }>;
   onClick?: () => void;
@@ -90,6 +91,9 @@ export function NJCard({ nj, alerts = [], onClick, selected }: NJCardProps) {
               <span className="flex-shrink-0 w-2 h-2 rounded-full bg-red-500 pulse-dot" />
             )}
           </div>
+          {nj.designation && (
+            <p className="text-[10px] text-gray-400 truncate mt-0.5">{nj.designation}</p>
+          )}
           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
             <span
               className={clsx(
