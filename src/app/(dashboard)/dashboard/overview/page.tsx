@@ -259,8 +259,8 @@ export default function OverviewPage() {
           </div>
         </div>
 
-        {/* Detail panel */}
-        <div className="lg:col-span-2">
+        {/* Detail panel — sticky so it stays visible when NJ list is scrolled */}
+        <div className="lg:col-span-2 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
           {selectedNJ && displayNJ ? (
             <div className="space-y-4 animate-scale-in">
               {/* NJ header card */}
