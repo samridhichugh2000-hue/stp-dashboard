@@ -64,7 +64,7 @@ export default function OverviewPage() {
         <StatCard
           label="Total CSMs"
           value={activeNJ.length}
-          subtitle="Currently active"
+          subtitle="Trainings initiated"
           icon={<Users size={20} />}
           gradient="from-indigo-500 to-violet-600"
           animationDelay={0}
