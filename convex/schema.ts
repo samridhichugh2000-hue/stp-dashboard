@@ -12,6 +12,7 @@ export default defineSchema({
     designation: v.optional(v.string()),        // Job designation from sheet
     claimedCorporates: v.optional(v.number()), // Count from "Claimed" column
     nrFromCorporates: v.optional(v.number()),  // Value from "NR from Corporates" column
+    totalNR: v.optional(v.number()),           // Pre-computed total from "INR" column in sheet
     joinDate: v.string(), // ISO date string
     managerId: v.string(),
     currentPhase: v.union(

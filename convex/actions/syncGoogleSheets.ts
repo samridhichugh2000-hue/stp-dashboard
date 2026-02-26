@@ -80,6 +80,7 @@ export const syncGoogleSheets = internalAction({
           designation: nj.designation,
           claimedCorporates: nj.claimedCorporates,
           nrFromCorporates: nj.nrFromCorporates,
+          totalNR: nj.totalNR,
         });
         count++;
       }

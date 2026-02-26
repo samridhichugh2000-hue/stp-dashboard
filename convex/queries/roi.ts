@@ -14,7 +14,7 @@ export const currentROISummary = query({
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .collect();
 
-    // Sum all monthly NR per NJ
+    // Sum all monthly NR per NJ (fallback if INR column not yet synced)
     const totals = new Map<string, number>();
     for (const r of nrRecords) {
       totals.set(r.njId, (totals.get(r.njId) ?? 0) + r.nrValue);
@@ -27,7 +27,10 @@ export const currentROISummary = query({
         name: nj.name,
         designation: nj.designation,
         tenureMonths: nj.tenureMonths,
-        totalNR: totals.has(nj._id) ? totals.get(nj._id)! : null,
+        // Prefer the sheet's pre-computed INR total; fall back to summing nrRecords
+        totalNR: nj.totalNR !== undefined
+          ? nj.totalNR
+          : (totals.has(nj._id) ? totals.get(nj._id)! : null),
       }));
   },
 });

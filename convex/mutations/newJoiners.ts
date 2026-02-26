@@ -31,6 +31,7 @@ export const upsertNewJoiner = internalMutation({
     designation: v.optional(v.string()),
     claimedCorporates: v.optional(v.number()),
     nrFromCorporates: v.optional(v.number()),
+    totalNR: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -53,6 +54,7 @@ export const upsertNewJoiner = internalMutation({
       designation: args.designation,
       claimedCorporates: args.claimedCorporates,
       nrFromCorporates: args.nrFromCorporates,
+      totalNR: args.totalNR,
     };
 
     if (existing) {

@@ -15,6 +15,7 @@ export interface NJRecord {
   designation?: string;
   claimedCorporates?: number;
   nrFromCorporates?: number;
+  totalNR?: number;           // "INR" column — pre-computed total NR from the sheet
 }
 
 export interface QubitRecord {

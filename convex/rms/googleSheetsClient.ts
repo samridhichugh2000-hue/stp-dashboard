@@ -171,6 +171,7 @@ export class GoogleSheetsRMSClient implements RMSClient {
     const statusIdx   = headers.findIndex((h) => h.toLowerCase().trim() === "status");
     const claimedIdx  = headers.findIndex((h) => h.toLowerCase().trim().startsWith("claimed"));
     const nrCorpIdx   = headers.findIndex((h) => h.toLowerCase().includes("nr from corp"));
+    const inrIdx      = headers.findIndex((h) => h.toLowerCase().trim() === "inr"); // pre-computed total NR
 
     // "Designation" appears only in the section-header row (row 0), not in field-name row
     const designationIdx = sectionHeaders.findIndex(
@@ -186,6 +187,7 @@ export class GoogleSheetsRMSClient implements RMSClient {
 
       const claimedRaw = claimedIdx >= 0 ? parseNRValue(row[claimedIdx] ?? "") : null;
       const nrCorpRaw  = nrCorpIdx  >= 0 ? parseNRValue(row[nrCorpIdx]  ?? "") : null;
+      const totalNRRaw = inrIdx     >= 0 ? parseNRValue(row[inrIdx]     ?? "") : null;
       const designation = designationIdx >= 0 ? (row[designationIdx]?.trim() || undefined) : undefined;
 
       results.push({
@@ -200,6 +202,7 @@ export class GoogleSheetsRMSClient implements RMSClient {
         designation,
         claimedCorporates: claimedRaw !== null ? claimedRaw : undefined,
         nrFromCorporates:  nrCorpRaw  !== null ? nrCorpRaw  : undefined,
+        totalNR:           totalNRRaw !== null ? totalNRRaw : undefined,
       });
     }
     return results;
