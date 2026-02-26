@@ -36,4 +36,11 @@ crons.interval(
   internal.actions.syncGoogleSheets.syncGoogleSheets
 );
 
+// Sync Teams huddle attendance daily at 09:30 IST (04:00 UTC)
+crons.daily(
+  "syncTeamsHuddles",
+  { hourUTC: 4, minuteUTC: 0 },
+  internal.actions.syncTeamsHuddles.syncTeamsHuddles
+);
+
 export default crons;

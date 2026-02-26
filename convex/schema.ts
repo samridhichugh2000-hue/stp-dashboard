@@ -134,7 +134,10 @@ export default defineSchema({
     conductedBy: v.string(),
     completed: v.boolean(),
     notes: v.optional(v.string()),
-  }).index("by_nj", ["njId"]),
+    teamsEventId: v.optional(v.string()),  // Microsoft Graph event ID for dedup
+  })
+    .index("by_nj", ["njId"])
+    .index("by_nj_date", ["njId", "date"]),
 
   // Assessment & checklist submissions
   assessmentChecklists: defineTable({

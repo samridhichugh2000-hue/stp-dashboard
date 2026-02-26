@@ -18,6 +18,7 @@ import type * as actions_syncNR from "../actions/syncNR.js";
 import type * as actions_syncQubits from "../actions/syncQubits.js";
 import type * as actions_syncRCB from "../actions/syncRCB.js";
 import type * as actions_syncROI from "../actions/syncROI.js";
+import type * as actions_syncTeamsHuddles from "../actions/syncTeamsHuddles.js";
 import type * as auth from "../auth.js";
 import type * as crons from "../crons.js";
 import type * as http from "../http.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   "actions/syncQubits": typeof actions_syncQubits;
   "actions/syncRCB": typeof actions_syncRCB;
   "actions/syncROI": typeof actions_syncROI;
+  "actions/syncTeamsHuddles": typeof actions_syncTeamsHuddles;
   auth: typeof auth;
   crons: typeof crons;
   http: typeof http;
