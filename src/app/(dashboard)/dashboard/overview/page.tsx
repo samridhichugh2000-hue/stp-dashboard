@@ -9,7 +9,7 @@ import { HuddleLog } from "@/components/panels/overview/HuddleLog";
 import { DayTaskTracker } from "@/components/panels/overview/DayTaskTracker";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { StatCard } from "@/components/shared/StatCard";
-import { Users, AlertTriangle, BarChart2, Clock } from "lucide-react";
+import { Users, CheckCircle2, Activity } from "lucide-react";
 
 export default function OverviewPage() {
   const [selectedNJ, setSelectedNJ] = useState<Id<"newJoiners"> | null>(null);
@@ -22,8 +22,8 @@ export default function OverviewPage() {
     return (
       <div className="space-y-6 animate-fade-in">
         {/* Stat card skeletons */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[...Array(3)].map((_, i) => (
             <div key={i} className="shimmer h-32 rounded-2xl" />
           ))}
         </div>
@@ -57,43 +57,30 @@ export default function OverviewPage() {
       </div>
 
       {/* ── KPI Stat Cards ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 stagger">
         <StatCard
-          label="Active NJs"
-          value={summary.activeNJs}
-          subtitle="Currently enrolled"
+          label="Total CSMs"
+          value={activeNJ.length}
+          subtitle="Currently active"
           icon={<Users size={20} />}
           gradient="from-indigo-500 to-violet-600"
-          trend={{ value: 12, label: "vs last month" }}
           animationDelay={0}
         />
         <StatCard
-          label="Pending Alerts"
-          value={summary.pendingAlerts}
-          subtitle="Need acknowledgement"
-          icon={<AlertTriangle size={20} />}
-          gradient="from-rose-500 to-red-600"
-          trend={{ value: -5, label: "vs last week" }}
+          label="STPs Completed"
+          value={24}
+          subtitle="Training programmes finished"
+          icon={<CheckCircle2 size={20} />}
+          gradient="from-emerald-500 to-teal-600"
           animationDelay={60}
         />
         <StatCard
-          label="Avg Qubit Score"
-          value={summary.avgQubitScore}
-          suffix="/100"
-          subtitle="Call quality average"
-          icon={<BarChart2 size={20} />}
-          gradient="from-emerald-500 to-teal-600"
-          trend={{ value: 8, label: "vs last week" }}
-          animationDelay={120}
-        />
-        <StatCard
-          label="Total Leads"
-          value={summary.totalLeads}
-          subtitle={`${summary.tatBreached} TAT breached`}
-          icon={<Clock size={20} />}
+          label="STPs Active"
+          value={5}
+          subtitle="Currently in progress"
+          icon={<Activity size={20} />}
           gradient="from-amber-500 to-orange-600"
-          trend={{ value: 3, label: "vs yesterday" }}
-          animationDelay={180}
+          animationDelay={120}
         />
       </div>
 
