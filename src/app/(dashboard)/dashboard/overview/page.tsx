@@ -105,7 +105,12 @@ export default function OverviewPage() {
             return (
               <div key={phase} className="flex-1">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className={`text-xs font-medium ${textColors[idx]}`}>{phase}</span>
+                  <span className={`text-xs font-medium ${textColors[idx]}`}>
+                    {phase}
+                    <span className="font-normal text-[10px] ml-1 opacity-60">
+                      {phase === "Orientation" ? "(< 1 mo)" : phase === "Training" ? "(1–3 mo)" : phase === "Field" ? "(3–6 mo)" : "(6+ mo)"}
+                    </span>
+                  </span>
                   <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${bgColors[idx]} ${textColors[idx]}`}>{count}</span>
                 </div>
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
