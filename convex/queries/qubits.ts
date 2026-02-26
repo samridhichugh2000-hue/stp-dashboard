@@ -28,6 +28,33 @@ export const recent7Days = query({
   },
 });
 
+/** Per-NJ qubit summary — used for the Qubits page table and top stat cards */
+export const allSummary = query({
+  args: {},
+  handler: async (ctx) => {
+    const njs = await ctx.db
+      .query("newJoiners")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .collect();
+    const allScores = await ctx.db.query("qubitScores").collect();
+
+    return [...njs]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((nj) => {
+        const scores = allScores.filter((s) => s.njId === nj._id);
+        return {
+          _id: nj._id,
+          name: nj.name,
+          empId: nj.empId,
+          designation: nj.designation,
+          totalSessions: scores.length,
+          above50: scores.filter((s) => s.score >= 50).length,
+          below50: scores.filter((s) => s.score < 50).length,
+        };
+      });
+  },
+});
+
 export const alertsBelow50 = query({
   args: {},
   handler: async (ctx) => {
