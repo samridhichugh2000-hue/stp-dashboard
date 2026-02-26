@@ -12,6 +12,7 @@ export interface NJRecord {
   email: string;
   joinDate: string; // ISO date "YYYY-MM-DD"
   status: string;   // "Red" | "Yellow" | "Green"
+  designation?: string;
   claimedCorporates?: number;
   nrFromCorporates?: number;
 }

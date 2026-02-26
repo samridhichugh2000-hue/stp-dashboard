@@ -139,13 +139,13 @@ export class GoogleSheetsRMSClient implements RMSClient {
     this.sheetId = sheetId;
   }
 
-  private async fetchRows(): Promise<{ headers: string[]; dataRows: string[][] }> {
+  private async fetchRows(): Promise<{ headers: string[]; sectionHeaders: string[]; dataRows: string[][] }> {
     const url = `https://docs.google.com/spreadsheets/d/${this.sheetId}/export?format=csv`;
     const res = await fetch(url, { redirect: "follow" });
     if (!res.ok) throw new Error(`Google Sheets fetch failed: ${res.status} ${res.statusText}`);
     const text = await res.text();
     const all = parseCSV(text);
-    if (all.length < 2) return { headers: [], dataRows: [] };
+    if (all.length < 2) return { headers: [], sectionHeaders: [], dataRows: [] };
 
     // The sheet may have a section-header row above the actual field-name row.
     // Find the first row that contains "Emp ID" or "Name" in its first 3 columns.
@@ -158,16 +158,24 @@ export class GoogleSheetsRMSClient implements RMSClient {
       }
     }
 
-    return { headers: all[headerIdx], dataRows: all.slice(headerIdx + 1) };
+    // The row above headerIdx (if any) contains section-level headers like "Designation"
+    const sectionHeaders = headerIdx > 0 ? all[headerIdx - 1] : [];
+
+    return { headers: all[headerIdx], sectionHeaders, dataRows: all.slice(headerIdx + 1) };
   }
 
   async fetchNewJoiners(): Promise<NJRecord[]> {
-    const { headers, dataRows } = await this.fetchRows();
+    const { headers, sectionHeaders, dataRows } = await this.fetchRows();
 
-    // Locate special columns by header name
+    // Locate special columns by field-name header
     const statusIdx   = headers.findIndex((h) => h.toLowerCase().trim() === "status");
     const claimedIdx  = headers.findIndex((h) => h.toLowerCase().trim().startsWith("claimed"));
     const nrCorpIdx   = headers.findIndex((h) => h.toLowerCase().includes("nr from corp"));
+
+    // "Designation" appears only in the section-header row (row 0), not in field-name row
+    const designationIdx = sectionHeaders.findIndex(
+      (h) => h.toLowerCase().trim() === "designation"
+    );
 
     const results: NJRecord[] = [];
     for (const row of dataRows) {
@@ -178,6 +186,7 @@ export class GoogleSheetsRMSClient implements RMSClient {
 
       const claimedRaw = claimedIdx >= 0 ? parseNRValue(row[claimedIdx] ?? "") : null;
       const nrCorpRaw  = nrCorpIdx  >= 0 ? parseNRValue(row[nrCorpIdx]  ?? "") : null;
+      const designation = designationIdx >= 0 ? (row[designationIdx]?.trim() || undefined) : undefined;
 
       results.push({
         empId,
@@ -188,6 +197,7 @@ export class GoogleSheetsRMSClient implements RMSClient {
         joinDate: parseDOJ(row[5]?.trim() || ""),
         email: row[6]?.trim() || "",
         status: statusIdx >= 0 ? (row[statusIdx]?.trim() || "") : "",
+        designation,
         claimedCorporates: claimedRaw !== null ? claimedRaw : undefined,
         nrFromCorporates:  nrCorpRaw  !== null ? nrCorpRaw  : undefined,
       });

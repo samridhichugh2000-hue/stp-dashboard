@@ -166,7 +166,10 @@ export default function OverviewPage() {
                   </div>
                   <div>
                     <h3 className="text-lg font-bold">{displayNJ.name}</h3>
-                    <p className="text-indigo-200 text-sm">
+                    {displayNJ.designation && (
+                      <p className="text-indigo-100 text-xs font-medium mt-0.5">{displayNJ.designation}</p>
+                    )}
+                    <p className="text-indigo-200 text-sm mt-0.5">
                       Joined {new Date(displayNJ.joinDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                       · {displayNJ.tenureMonths} months tenure
                     </p>

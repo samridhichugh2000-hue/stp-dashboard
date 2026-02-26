@@ -9,6 +9,7 @@ export default defineSchema({
     department: v.optional(v.string()),         // e.g. "Sales"
     location: v.optional(v.string()),           // Base location
     email: v.optional(v.string()),              // Work email
+    designation: v.optional(v.string()),        // Job designation from sheet
     claimedCorporates: v.optional(v.number()), // Count from "Claimed" column
     nrFromCorporates: v.optional(v.number()),  // Value from "NR from Corporates" column
     joinDate: v.string(), // ISO date string

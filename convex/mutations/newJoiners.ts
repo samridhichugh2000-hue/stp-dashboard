@@ -28,6 +28,7 @@ export const upsertNewJoiner = internalMutation({
       v.literal("Non-Performer"),
       v.literal("Uncategorised")
     ),
+    designation: v.optional(v.string()),
     claimedCorporates: v.optional(v.number()),
     nrFromCorporates: v.optional(v.number()),
   },
@@ -49,6 +50,7 @@ export const upsertNewJoiner = internalMutation({
       currentPhase: args.currentPhase,
       category: args.category,
       isActive: true,
+      designation: args.designation,
       claimedCorporates: args.claimedCorporates,
       nrFromCorporates: args.nrFromCorporates,
     };

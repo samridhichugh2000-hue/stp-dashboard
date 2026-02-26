@@ -77,6 +77,7 @@ export const syncGoogleSheets = internalAction({
           tenureMonths: months,
           currentPhase: derivePhase(months),
           category: deriveCategory(nj.status),
+          designation: nj.designation,
           claimedCorporates: nj.claimedCorporates,
           nrFromCorporates: nj.nrFromCorporates,
         });
