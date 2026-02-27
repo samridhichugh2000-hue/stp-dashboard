@@ -82,17 +82,23 @@ export default defineSchema({
     .index("by_nj", ["njId"])
     .index("by_nj_month_year", ["njId", "year", "month"]),
 
-  // ROI weekly records
+  // ROI records — weekly snapshots (sheets/mock) or period-range (live API)
   roiRecords: defineTable({
     njId: v.id("newJoiners"),
-    weekStart: v.string(), // ISO date of Monday
-    roiValue: v.number(),
+    weekStart: v.string(), // ISO date of Monday (sheets/mock) or FromDate (live API)
+    roiValue: v.number(),  // 0-100 scale (sheets/mock) or actual monetary value (live API)
     colorCode: v.union(
       v.literal("Green"),
       v.literal("Black"),
       v.literal("Red"),
       v.literal("Yellow")
     ),
+    // Fields from the updated live API
+    fromDate: v.optional(v.string()),
+    toDate: v.optional(v.string()),
+    leads: v.optional(v.number()),
+    registrations: v.optional(v.number()),
+    conversionRate: v.optional(v.number()),
   })
     .index("by_nj", ["njId"])
     .index("by_nj_week", ["njId", "weekStart"]),

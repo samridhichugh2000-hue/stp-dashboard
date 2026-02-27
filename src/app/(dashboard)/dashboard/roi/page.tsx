@@ -57,14 +57,17 @@ export default function ROIPage() {
 
   if (!rows) return <div className="animate-pulse h-96 bg-white/60 rounded-2xl" />;
 
-  // Tenure-based counts (only rows with NR data)
-  const withNR = rows.filter(r => r.totalNR !== null);
-  const totalPositive      = withNR.filter(r => r.totalNR! > 0).length;
-  const positiveWithin4    = withNR.filter(r => r.totalNR! > 0 && r.tenureMonths <= 4).length;
-  const negativeWithin4    = withNR.filter(r => r.totalNR! < 0 && r.tenureMonths <= 4).length;
-  const negativeBeyond4    = withNR.filter(r => r.totalNR! < 0 && r.tenureMonths > 4).length;
+  // Derive date range from first row that has it
+  const dateRange = rows.find(r => r.fromDate)
+    ? { from: rows.find(r => r.fromDate)!.fromDate!, to: rows.find(r => r.toDate)!.toDate! }
+    : null;
 
-  const totalNegative = withNR.filter(r => r.totalNR! < 0).length;
+  const withNR = rows.filter(r => r.totalNR !== null);
+  const totalPositive   = withNR.filter(r => r.totalNR! > 0).length;
+  const positiveWithin4 = withNR.filter(r => r.totalNR! > 0 && r.tenureMonths <= 4).length;
+  const negativeWithin4 = withNR.filter(r => r.totalNR! < 0 && r.tenureMonths <= 4).length;
+  const negativeBeyond4 = withNR.filter(r => r.totalNR! < 0 && r.tenureMonths > 4).length;
+  const totalNegative   = withNR.filter(r => r.totalNR! < 0).length;
 
   const pieData = [
     { name: "Positive", value: totalPositive,  color: "#f59e0b" },
@@ -74,7 +77,7 @@ export default function ROIPage() {
   const statCards = [
     {
       label: "Total Positive ROI",
-      desc: "CSMs with positive NR",
+      desc: "CSMs with positive ROI",
       count: totalPositive,
       bg: "from-amber-400 to-yellow-500",
     },
@@ -98,15 +101,22 @@ export default function ROIPage() {
     },
   ];
 
+  // Detect whether we have live-API data (leads/registrations present)
+  const hasLiveData = rows.some(r => r.leads !== null);
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">ROI Status of CSMs</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Current total net revenue per CSM</p>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {dateRange
+            ? `Period: ${dateRange.from} – ${dateRange.to}`
+            : "Current total net revenue per CSM"}
+        </p>
       </div>
 
-      {/* Stat cards — 4 tenure-based */}
+      {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
         {statCards.map(c => (
           <div key={c.label} className={`bg-gradient-to-br ${c.bg} rounded-2xl p-5 text-white shadow-lg card-hover`}>
@@ -133,7 +143,14 @@ export default function ROIPage() {
                 <th className="text-left py-2 px-3 text-xs font-semibold text-gray-400 w-8">#</th>
                 <th className="text-left py-2 px-3 text-xs font-semibold text-gray-400">CSM Name</th>
                 <th className="text-left py-2 px-3 text-xs font-semibold text-gray-400">Tenure</th>
-                <th className="text-right py-2 px-3 text-xs font-semibold text-gray-400">Current ROI</th>
+                {hasLiveData && (
+                  <>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-gray-400">Leads</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-gray-400">Registrations</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold text-gray-400">Conv. Rate</th>
+                  </>
+                )}
+                <th className="text-right py-2 px-3 text-xs font-semibold text-gray-400">ROI</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -147,6 +164,13 @@ export default function ROIPage() {
                         {row.designation && <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>}
                       </td>
                       <td className="py-2.5 px-3 text-xs text-gray-400">{fmtTenure(row.tenureMonths)}</td>
+                      {hasLiveData && (
+                        <>
+                          <td className="py-2.5 px-3 text-right text-xs text-gray-300">—</td>
+                          <td className="py-2.5 px-3 text-right text-xs text-gray-300">—</td>
+                          <td className="py-2.5 px-3 text-right text-xs text-gray-300">—</td>
+                        </>
+                      )}
                       <td className="py-2.5 px-3 text-right text-xs text-gray-300">—</td>
                     </tr>
                   );
@@ -160,6 +184,19 @@ export default function ROIPage() {
                       {row.designation && <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>}
                     </td>
                     <td className="py-2.5 px-3 text-xs text-gray-400">{fmtTenure(row.tenureMonths)}</td>
+                    {hasLiveData && (
+                      <>
+                        <td className="py-2.5 px-3 text-right text-xs text-gray-500 tabular-nums">
+                          {row.leads ?? "—"}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-xs text-gray-500 tabular-nums">
+                          {row.registrations ?? "—"}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-xs text-gray-500 tabular-nums">
+                          {row.conversionRate !== null ? `${row.conversionRate.toFixed(2)}%` : "—"}
+                        </td>
+                      </>
+                    )}
                     <td className={`py-2.5 px-3 text-right text-sm font-bold tabular-nums ${NUM_COLOR[code]}`}>
                       {fmtNumber(row.totalNR)}
                     </td>

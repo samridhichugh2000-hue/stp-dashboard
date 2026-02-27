@@ -51,6 +51,12 @@ export interface ROIRecord {
   weekStart: string;
   roiValue: number;
   colorCode: "Green" | "Black" | "Red" | "Yellow";
+  // Fields from the updated live API
+  fromDate?: string;
+  toDate?: string;
+  leads?: number;
+  registrations?: number;
+  conversionRate?: number;
 }
 
 export interface RCBRecord {

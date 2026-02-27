@@ -46,7 +46,27 @@ export class LiveRMSClient implements RMSClient {
   }
 
   async fetchROI(): Promise<ROIRecord[]> {
-    return this.get<ROIRecord[]>("/api/v1/roi-records");
+    type RawROI = {
+      Leads: number;
+      Registrations: number;
+      ConversionRate: number;
+      FromDate: string;
+      ToDate: string;
+      DisplayColumns: { CCE: string };
+      ROI: number;
+    };
+    const raw = await this.get<RawROI[]>("/api/v1/roi-records");
+    return raw.map((r) => ({
+      njId: r.DisplayColumns.CCE,
+      weekStart: r.FromDate,
+      roiValue: r.ROI,
+      colorCode: (r.ROI > 0 ? "Green" : r.ROI < 0 ? "Red" : "Yellow") as ROIRecord["colorCode"],
+      fromDate: r.FromDate,
+      toDate: r.ToDate,
+      leads: r.Leads,
+      registrations: r.Registrations,
+      conversionRate: r.ConversionRate,
+    }));
   }
 
   async fetchRCB(): Promise<RCBRecord[]> {

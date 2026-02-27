@@ -2,36 +2,56 @@ import { query, internalQuery } from "../_generated/server";
 import { v } from "convex/values";
 
 /**
- * Current total ROI per CSM (sum of all imported monthly NR values).
- * Used for the simple "CSM Name | Current ROI" table on the ROI page.
+ * Current ROI summary per CSM.
+ * When live API data is present (roiRecords with fromDate/toDate), uses that.
+ * Falls back to the sheet's INR total or summed nrRecords otherwise.
  */
 export const currentROISummary = query({
   args: {},
   handler: async (ctx) => {
     const nrRecords = await ctx.db.query("nrRecords").collect();
+    const roiRecords = await ctx.db.query("roiRecords").collect();
     const njs = await ctx.db
       .query("newJoiners")
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .collect();
 
-    // Sum all monthly NR per NJ (fallback if INR column not yet synced)
+    // Sum all monthly NR per NJ (fallback)
     const totals = new Map<string, number>();
     for (const r of nrRecords) {
       totals.set(r.njId, (totals.get(r.njId) ?? 0) + r.nrValue);
     }
 
+    // Latest ROI record per NJ (prefer live-API records that have fromDate)
+    const latestRoi = new Map<string, typeof roiRecords[0]>();
+    for (const r of roiRecords) {
+      const existing = latestRoi.get(r.njId);
+      if (!existing || r.weekStart > existing.weekStart) {
+        latestRoi.set(r.njId, r);
+      }
+    }
+
     return [...njs]
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map((nj) => ({
-        _id: nj._id,
-        name: nj.name,
-        designation: nj.designation,
-        tenureMonths: nj.tenureMonths,
-        // Prefer the sheet's pre-computed INR total; fall back to summing nrRecords
-        totalNR: nj.totalNR !== undefined
+      .map((nj) => {
+        const roi = latestRoi.get(nj._id);
+        const fallbackNR = nj.totalNR !== undefined
           ? nj.totalNR
-          : (totals.has(nj._id) ? totals.get(nj._id)! : null),
-      }));
+          : (totals.has(nj._id) ? totals.get(nj._id)! : null);
+        return {
+          _id: nj._id,
+          name: nj.name,
+          designation: nj.designation,
+          tenureMonths: nj.tenureMonths,
+          // Prefer live API roiValue when it carries monetary data (has fromDate)
+          totalNR: roi?.fromDate ? roi.roiValue : fallbackNR,
+          leads: roi?.leads ?? null,
+          registrations: roi?.registrations ?? null,
+          conversionRate: roi?.conversionRate ?? null,
+          fromDate: roi?.fromDate ?? null,
+          toDate: roi?.toDate ?? null,
+        };
+      });
   },
 });
 

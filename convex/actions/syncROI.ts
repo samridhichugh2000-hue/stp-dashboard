@@ -26,6 +26,11 @@ export const syncROI = internalAction({
           weekStart: record.weekStart,
           roiValue: record.roiValue,
           colorCode: record.colorCode,
+          fromDate: record.fromDate,
+          toDate: record.toDate,
+          leads: record.leads,
+          registrations: record.registrations,
+          conversionRate: record.conversionRate,
         });
         count++;
       }
