@@ -72,6 +72,6 @@ export interface RMSClient {
   fetchQubits(): Promise<QubitRecord[]>;
   fetchLeads(): Promise<LeadRecord[]>;
   fetchNR(): Promise<NRRecord[]>;
-  fetchROI(): Promise<ROIRecord[]>;
+  fetchROI(fromDate?: string, toDate?: string): Promise<ROIRecord[]>;
   fetchRCB(): Promise<RCBRecord[]>;
 }

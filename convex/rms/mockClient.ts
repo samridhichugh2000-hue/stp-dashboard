@@ -150,7 +150,7 @@ export class MockRMSClient implements RMSClient {
     return records;
   }
 
-  async fetchROI(): Promise<ROIRecord[]> {
+  async fetchROI(_fromDate?: string, _toDate?: string): Promise<ROIRecord[]> {
     const records: ROIRecord[] = [];
     const colorMap = (roi: number): ROIRecord["colorCode"] => {
       if (roi >= 80) return "Green";

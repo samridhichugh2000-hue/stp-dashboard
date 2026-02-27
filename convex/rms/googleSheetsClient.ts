@@ -241,7 +241,7 @@ export class GoogleSheetsRMSClient implements RMSClient {
     return results;
   }
 
-  async fetchROI(): Promise<ROIRecord[]> {
+  async fetchROI(_fromDate?: string, _toDate?: string): Promise<ROIRecord[]> {
     const { headers, dataRows } = await this.fetchRows();
 
     const monthCols: Array<{ idx: number; month: number; year: number }> = [];

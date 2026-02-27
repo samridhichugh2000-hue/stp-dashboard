@@ -45,7 +45,7 @@ export class LiveRMSClient implements RMSClient {
     return this.get<NRRecord[]>("/api/v1/nr-records");
   }
 
-  async fetchROI(): Promise<ROIRecord[]> {
+  async fetchROI(fromDate?: string, toDate?: string): Promise<ROIRecord[]> {
     type RawROI = {
       Leads: number;
       Registrations: number;
@@ -55,7 +55,11 @@ export class LiveRMSClient implements RMSClient {
       DisplayColumns: { CCE: string };
       ROI: number;
     };
-    const raw = await this.get<RawROI[]>("/api/v1/roi-records");
+    const params = new URLSearchParams();
+    if (fromDate) params.set("FromDate", fromDate);
+    if (toDate) params.set("ToDate", toDate);
+    const qs = params.toString() ? `?${params}` : "";
+    const raw = await this.get<RawROI[]>(`/api/v1/roi-records${qs}`);
     return raw.map((r) => ({
       njId: r.DisplayColumns.CCE,
       weekStart: r.FromDate,
