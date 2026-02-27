@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useAction } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { PieChart, Pie, Cell, Legend, ResponsiveContainer, Sector } from "recharts";
@@ -102,11 +102,15 @@ export default function ROIPage() {
   const [error, setError]             = useState<string | null>(null);
 
   // DB data for stat cards & pie (always reflects last sync)
-  const defaultRows = useQuery(api.queries.roi.currentROISummary);
-  const runSearch   = useAction(api.actions.searchROI.searchROI);
+  const defaultRows  = useQuery(api.queries.roi.currentROISummary);
+  const runSearch    = useAction(api.actions.searchROI.searchROI);
+  const didFetch     = useRef(false);
 
-  // ── Auto-load current month on mount ──────────────────────────────────────
+  // ── Auto-load current month on mount (guarded against Strict Mode double-run) ──
   useEffect(() => {
+    if (didFetch.current) return;
+    didFetch.current = true;
+
     const from = toApiDate(firstDayOfMonth());
     const to   = toApiDate(todayIso());
     setIsLoading(true);
@@ -249,7 +253,7 @@ export default function ROIPage() {
           </div>
         </div>
 
-        {/* Loading skeleton */}
+        {/* Initial loading skeleton — only when no data at all yet */}
         {isLoading && !tableData && (
           <div className="space-y-2">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -258,9 +262,14 @@ export default function ROIPage() {
           </div>
         )}
 
-        {/* Table */}
-        {(!isLoading || tableData) && (
-          <div className={`overflow-x-auto transition-opacity ${isLoading ? "opacity-40 pointer-events-none" : ""}`}>
+        {/* Table — stays visible with a subtle loading bar while re-searching */}
+        {tableData !== null && (
+          <div className="overflow-x-auto">
+            {isLoading && (
+              <div className="h-1 w-full rounded-full bg-indigo-100 mb-3 overflow-hidden">
+                <div className="h-1 bg-indigo-400 animate-[pulse_1s_ease-in-out_infinite] w-1/2 rounded-full" />
+              </div>
+            )}
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="border-b-2 border-gray-100">

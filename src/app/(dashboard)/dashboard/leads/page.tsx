@@ -291,17 +291,34 @@ export default function LeadsPage() {
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">From Date</label>
             <input type="date" value={fromDate}
-              onChange={e => { setFromDate(e.target.value); doFetch(e.target.value, toDate); }}
+              onChange={e => setFromDate(e.target.value)}
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
           </div>
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">To Date</label>
             <input type="date" value={toDate}
-              onChange={e => { setToDate(e.target.value); doFetch(fromDate, e.target.value); }}
+              onChange={e => setToDate(e.target.value)}
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300"
             />
           </div>
+          <button
+            onClick={() => doFetch(fromDate, toDate)}
+            disabled={loading || !fromDate || !toDate}
+            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold shadow hover:bg-indigo-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          >
+            {loading ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+              </svg>
+            )}
+            {loading ? "Searching…" : "Search"}
+          </button>
           {rows && csmList.length > 0 && (
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">CSM</label>
