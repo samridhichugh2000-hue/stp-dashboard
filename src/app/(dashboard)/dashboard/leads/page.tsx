@@ -56,6 +56,14 @@ function currentMonthLabel(): string {
   return `${MONTHS_ABBR[d.getMonth()]} ${d.getFullYear()}`;
 }
 
+// ── Module-level cache — survives navigation (component unmount/remount) ──────
+interface LeadsCache {
+  rows:     FlatRow[];
+  fromDate: string;
+  toDate:   string;
+}
+let _cache: LeadsCache | null = null;
+
 // ── Types ────────────────────────────────────────────────────────
 interface RawApiRow {
   Leads?: number;
@@ -191,11 +199,12 @@ export default function LeadsPage() {
   const fetchROI = useAction(api.actions.koenigApi.getROIData);
   const njs      = useQuery(api.queries.newJoiners.list, {});
 
-  const [fromDate,   setFromDate]   = useState(firstOfMonth());
-  const [toDate,     setToDate]     = useState(lastOfMonth());
+  // Initialise from cache so returning users see data instantly
+  const [fromDate,   setFromDate]   = useState(() => _cache?.fromDate ?? firstOfMonth());
+  const [toDate,     setToDate]     = useState(() => _cache?.toDate   ?? lastOfMonth());
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState<string | null>(null);
-  const [allRows,    setAllRows]    = useState<FlatRow[] | null>(null);
+  const [allRows,    setAllRows]    = useState<FlatRow[] | null>(() => _cache?.rows ?? null);
   const [csmFilter,  setCsmFilter]  = useState<string>("all");
 
   const njNameSet = new Set(
@@ -242,7 +251,9 @@ export default function LeadsPage() {
         return;
       }
       const raw: RawApiRow[] = Array.isArray(result.content) ? result.content : [];
-      setAllRows(raw.map(flattenRow));
+      const flatRows = raw.map(flattenRow);
+      _cache = { rows: flatRows, fromDate: from, toDate: to };
+      setAllRows(flatRows);
       setCsmFilter("all");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Unknown error");
@@ -253,7 +264,8 @@ export default function LeadsPage() {
   }, [fetchROI]);
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
+    // Skip auto-fetch if we already have cached data — user will see it instantly
+    if (!authLoading && isAuthenticated && !_cache) {
       doFetch(fromDate, toDate);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
