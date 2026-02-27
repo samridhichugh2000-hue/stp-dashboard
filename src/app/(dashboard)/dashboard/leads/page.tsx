@@ -56,13 +56,21 @@ function currentMonthLabel(): string {
   return `${MONTHS_ABBR[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-// ── Module-level cache — survives navigation (component unmount/remount) ──────
-interface LeadsCache {
-  rows:     FlatRow[];
-  fromDate: string;
-  toDate:   string;
+// ── Session cache — persists across navigation via sessionStorage ─────────────
+interface LeadsCache { rows: FlatRow[]; fromDate: string; toDate: string; }
+const CACHE_KEY = "stp_leads_cache";
+
+function readCache(): LeadsCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY);
+    return raw ? (JSON.parse(raw) as LeadsCache) : null;
+  } catch { return null; }
 }
-let _cache: LeadsCache | null = null;
+
+function writeCache(c: LeadsCache) {
+  try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(c)); } catch {}
+}
 
 // ── Types ────────────────────────────────────────────────────────
 interface RawApiRow {
@@ -199,12 +207,12 @@ export default function LeadsPage() {
   const fetchROI = useAction(api.actions.koenigApi.getROIData);
   const njs      = useQuery(api.queries.newJoiners.list, {});
 
-  // Initialise from cache so returning users see data instantly
-  const [fromDate,   setFromDate]   = useState(() => _cache?.fromDate ?? firstOfMonth());
-  const [toDate,     setToDate]     = useState(() => _cache?.toDate   ?? lastOfMonth());
+  // Initialise from sessionStorage cache so returning users see data instantly
+  const [fromDate,   setFromDate]   = useState(() => readCache()?.fromDate ?? firstOfMonth());
+  const [toDate,     setToDate]     = useState(() => readCache()?.toDate   ?? lastOfMonth());
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState<string | null>(null);
-  const [allRows,    setAllRows]    = useState<FlatRow[] | null>(() => _cache?.rows ?? null);
+  const [allRows,    setAllRows]    = useState<FlatRow[] | null>(() => readCache()?.rows ?? null);
   const [csmFilter,  setCsmFilter]  = useState<string>("all");
 
   const njNameSet = new Set(
@@ -252,7 +260,7 @@ export default function LeadsPage() {
       }
       const raw: RawApiRow[] = Array.isArray(result.content) ? result.content : [];
       const flatRows = raw.map(flattenRow);
-      _cache = { rows: flatRows, fromDate: from, toDate: to };
+      writeCache({ rows: flatRows, fromDate: from, toDate: to });
       setAllRows(flatRows);
       setCsmFilter("all");
     } catch (e: unknown) {
@@ -265,7 +273,7 @@ export default function LeadsPage() {
 
   useEffect(() => {
     // Skip auto-fetch if we already have cached data — user will see it instantly
-    if (!authLoading && isAuthenticated && !_cache) {
+    if (!authLoading && isAuthenticated && !readCache()) {
       doFetch(fromDate, toDate);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
