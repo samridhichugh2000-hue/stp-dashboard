@@ -11,11 +11,8 @@ export interface NJRecord {
   location: string;
   email: string;
   joinDate: string; // ISO date "YYYY-MM-DD"
-  status: string;   // "Red" | "Yellow" | "Green"
+  status: string;   // "Active" | "Inactive"
   designation?: string;
-  claimedCorporates?: number;
-  nrFromCorporates?: number;
-  totalNR?: number;           // "INR" column — pre-computed total NR from the sheet
 }
 
 export interface QubitRecord {

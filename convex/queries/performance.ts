@@ -12,28 +12,29 @@ export const njPerformanceStatus = query({
     return [...njs]
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((nj) => {
-        const records = allNR.filter((r) => r.njId === nj._id);
+        const nrRecords = allNR.filter((r) => r.njId === nj._id);
+
         let nrStatus: "Positive" | "Negative" | null = null;
-        let nrPositiveMonth: number | null = null; // earliest tenure month (1–4) where NR was positive
+        let nrPositiveMonth: number | null = null;
         let roiStatus: "Positive" | "Negative" | null = null;
 
-        if (records.length > 0) {
+        if (nrRecords.length > 0) {
           // Latest NR status
-          const latest = [...records].sort((a, b) =>
+          const latest = [...nrRecords].sort((a, b) =>
             a.year !== b.year ? b.year - a.year : b.month - a.month
           )[0];
           nrStatus = latest.isPositive ? "Positive" : "Negative";
 
-          // Total NR → ROI
-          const total = records.reduce((s, r) => s + r.nrValue, 0);
-          roiStatus = total > 0 ? "Positive" : "Negative";
+          // ROI = total NR sum — same data source as NRD section (Koenig CCE NR API)
+          const totalNR = nrRecords.reduce((s, r) => s + r.nrValue, 0);
+          roiStatus = totalNR > 0 ? "Positive" : "Negative";
 
-          // Find earliest month within first 4 tenure months where NR was positive
-          const joinDate = new Date(nj.joinDate);
-          const joinYear = joinDate.getFullYear();
-          const joinMonth = joinDate.getMonth() + 1; // 1-indexed
+          // Earliest positive month within first 4 tenure months
+          const joinDate  = new Date(nj.joinDate);
+          const joinYear  = joinDate.getFullYear();
+          const joinMonth = joinDate.getMonth() + 1;
 
-          const positiveEarly = records
+          const positiveEarly = nrRecords
             .map((r) => ({
               ...r,
               tenureMonth: (r.year - joinYear) * 12 + (r.month - joinMonth),
@@ -51,10 +52,11 @@ export const njPerformanceStatus = query({
           name: nj.name,
           designation: nj.designation,
           tenureMonths: nj.tenureMonths,
+          category: nj.category,
           nrStatus,
           nrPositiveMonth,
           roiStatus,
-          claimedCorporates: nj.claimedCorporates ?? 0,
+          claimedCorporates: 0,
         };
       });
   },

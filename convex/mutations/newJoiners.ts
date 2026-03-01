@@ -2,7 +2,7 @@ import { mutation, internalMutation } from "../_generated/server";
 import { v } from "convex/values";
 
 /**
- * Upsert a New Joiner from Google Sheets.
+ * Upsert a New Joiner from the CSM API.
  * Matches on empId; inserts if not found, patches if found.
  */
 export const upsertNewJoiner = internalMutation({
@@ -29,9 +29,7 @@ export const upsertNewJoiner = internalMutation({
       v.literal("Uncategorised")
     )),
     designation: v.optional(v.string()),
-    claimedCorporates: v.optional(v.number()),
-    nrFromCorporates: v.optional(v.number()),
-    totalNR: v.optional(v.number()),
+    isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const existing = await ctx.db
@@ -49,11 +47,8 @@ export const upsertNewJoiner = internalMutation({
       joinDate: args.joinDate,
       tenureMonths: args.tenureMonths,
       currentPhase: args.currentPhase,
-      isActive: true,
+      isActive: args.isActive ?? true,
       designation: args.designation,
-      claimedCorporates: args.claimedCorporates,
-      nrFromCorporates: args.nrFromCorporates,
-      totalNR: args.totalNR,
     };
 
     if (existing) {

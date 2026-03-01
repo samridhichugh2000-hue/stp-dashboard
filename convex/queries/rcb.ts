@@ -1,7 +1,7 @@
 import { query } from "../_generated/server";
 import { v } from "convex/values";
 
-/** Per-CSM corporate summary: Claimed count + NR from Corporates, from Google Sheet data. */
+/** Per-CSM corporate summary. Corporate claim data not yet available — returns null for those fields. */
 export const allCorpSummary = query({
   args: {},
   handler: async (ctx) => {
@@ -11,14 +11,14 @@ export const allCorpSummary = query({
       .collect();
 
     return [...njs]
-      .sort((a, b) => (b.nrFromCorporates ?? -Infinity) - (a.nrFromCorporates ?? -Infinity))
+      .sort((a, b) => a.name.localeCompare(b.name))
       .map((nj) => ({
         _id: nj._id,
         name: nj.name,
         designation: nj.designation,
         tenureMonths: nj.tenureMonths,
-        claimedCorporates: nj.claimedCorporates ?? null,
-        nrFromCorporates: nj.nrFromCorporates ?? null,
+        claimedCorporates: null as null,
+        nrFromCorporates: null as null,
       }));
   },
 });

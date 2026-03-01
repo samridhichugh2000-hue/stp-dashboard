@@ -117,6 +117,9 @@ interface CSMRecord {
   name: string;
   designation: string;
   managerName: string;
+  location: string;
+  department: string;
+  email: string;
   joinDate: string;
   tenureMonths: number;
   currentPhase: "Orientation" | "Training" | "Field" | "Graduated";
@@ -131,10 +134,13 @@ function parseCSMRecord(raw: Record<string, unknown>): CSMRecord | null {
   if (!empId) return null;
 
   const designation = String(raw.Designation ?? raw.designation ?? "").trim();
-  if (!designation.toLowerCase().includes("customer success")) return null;
+  const department  = String(raw.Department ?? raw.Dept ?? raw.Division ?? raw.department ?? "").trim();
+  if (!department.toLowerCase().includes("sales")) return null;
 
   const name = String(raw.Name ?? raw.EmployeeName ?? raw.name ?? "").trim();
   const managerName = String(raw.ReportingManager ?? raw.ManagerName ?? raw.Manager ?? raw.managerName ?? "").trim();
+  const location = String(raw.BaseLocation ?? raw.Location ?? raw.City ?? raw.location ?? "").trim();
+  const email = String(raw.Email ?? raw.EmailId ?? raw.EmailAddress ?? raw.WorkEmail ?? raw.email ?? "").trim();
 
   const dojRaw = String(raw.DOJ ?? raw.DateOfJoining ?? raw.JoiningDate ?? "").trim();
   const joinDate = parseDOJ(dojRaw);
@@ -150,6 +156,9 @@ function parseCSMRecord(raw: Record<string, unknown>): CSMRecord | null {
     name,
     designation,
     managerName,
+    location,
+    department,
+    email,
     joinDate,
     tenureMonths: months,
     currentPhase: derivePhase(months),
@@ -198,12 +207,30 @@ export const syncCSMFromAPI = internalAction({
 
       const rawRecords: unknown[] = Array.isArray(data.content) ? data.content : [];
 
+      // Dump full first record so we can identify every field name + value
+      if (rawRecords.length > 0) {
+        console.log(`[syncCSMFromAPI] First record sample: ${JSON.stringify(rawRecords[0])}`);
+        // Log EmpCode vs EmpId for all records to detect ID mismatches with CCE NR API
+        const idSamples = rawRecords.slice(0, 5).map(r => {
+          const rec = r as Record<string, unknown>;
+          return `EmpCode=${rec.EmpCode ?? "?"} EmpId=${rec.EmpId ?? "?"} Name="${rec.Name ?? rec.EmployeeName ?? "?"}"`;
+        });
+        console.log(`[syncCSMFromAPI] ID field samples (first 5): ${idSamples.join(" | ")}`);
+      }
+
       // Parse and filter for Customer Success
       const csms: CSMRecord[] = [];
       let skipped = 0;
       for (const raw of rawRecords) {
         const record = parseCSMRecord(raw as Record<string, unknown>);
-        if (!record) { skipped++; continue; }
+        if (!record) {
+          skipped++;
+          const r = raw as Record<string, unknown>;
+          console.log(
+            `[syncCSMFromAPI] Skipped — EmpCode=${r.EmpCode ?? r.EmpId ?? "?"} Name="${r.Name ?? r.EmployeeName ?? "?"}" Designation="${r.Designation ?? "?"}" DOJ="${r.DOJ ?? "?"}" Status="${r.Status ?? "?"}"`
+          );
+          continue;
+        }
         csms.push(record);
       }
 
@@ -214,10 +241,14 @@ export const syncCSMFromAPI = internalAction({
           empId: csm.empId,
           name: csm.name,
           managerName: csm.managerName,
+          location: csm.location || undefined,
+          department: csm.department || undefined,
+          email: csm.email || undefined,
           joinDate: csm.joinDate,
           tenureMonths: csm.tenureMonths,
           currentPhase: csm.currentPhase,
           designation: csm.designation,
+          isActive: csm.isActive,
           // category intentionally omitted → preserved for existing, "Uncategorised" for new
         });
         upsertedEmpIds.push(csm.empId);

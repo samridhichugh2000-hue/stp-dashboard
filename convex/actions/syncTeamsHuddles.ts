@@ -32,29 +32,41 @@ const MODULE = "teams_huddles";
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
 
-/** Returns YYYY-MM-DD strings for Mon–Fri, day 2 through day 14 from DOJ. */
+/** Count Mon–Fri days from DOJ+1 through today (inclusive). */
+function workingDaysSince(dojISO: string): number {
+  const doj = new Date(dojISO);
+  doj.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let count = 0;
+  const d = new Date(doj);
+  d.setDate(d.getDate() + 1);
+  while (d <= today) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
+/** Returns YYYY-MM-DD strings for working days 1–14 from DOJ (Mon–Fri only). */
 function computeHuddleDates(dojISO: string): string[] {
   const doj = new Date(dojISO);
   const dates: string[] = [];
-  for (let offset = 1; offset <= 13; offset++) {
+  let workingDayCount = 0;
+  let offset = 1;
+  while (workingDayCount < 14) {
     const d = new Date(doj);
     d.setDate(doj.getDate() + offset);
     const dow = d.getDay();
     if (dow !== 0 && dow !== 6) {
       dates.push(d.toISOString().split("T")[0]);
+      workingDayCount++;
     }
+    offset++;
+    if (offset > 30) break; // safety cap (covers any week with public holidays)
   }
   return dates;
-}
-
-/** True if DOJ is within the last `days` calendar days. */
-function isWithinLastNDays(dojISO: string, days: number): boolean {
-  const doj = new Date(dojISO);
-  doj.setHours(0, 0, 0, 0);
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-  cutoff.setHours(0, 0, 0, 0);
-  return doj >= cutoff;
 }
 
 // ── Graph API helpers ────────────────────────────────────────────────────────
@@ -205,7 +217,7 @@ export const syncTeamsHuddles = internalAction({
     try {
       // 1. Get active NJs with DOJ within last 14 days
       const allNJs = await ctx.runQuery(internal.queries.newJoiners.listAllInternal, {});
-      const recentNJs = allNJs.filter((nj) => nj.isActive && isWithinLastNDays(nj.joinDate, 14));
+      const recentNJs = allNJs.filter((nj) => nj.isActive && workingDaysSince(nj.joinDate) < 15);
 
       if (recentNJs.length === 0) {
         await ctx.runMutation(internal.mutations.syncLogs.upsertLog, {
@@ -250,14 +262,14 @@ export const syncTeamsHuddles = internalAction({
       // 6. Upsert huddle logs per NJ × date
       let count = 0;
       for (const nj of recentNJs) {
-        const njNameLower = nj.name.toLowerCase();
+        const njFirstNameLower = nj.name.split(" ")[0].toLowerCase();
         const njEmailLower = (nj.email ?? "").toLowerCase();
         const huddleDates = computeHuddleDates(nj.joinDate).filter((d) => d <= today);
 
         for (const date of huddleDates) {
           const dayEvents = eventsByDate[date] ?? [];
           const matchedEvent = dayEvents.find((e) =>
-            e.subject.includes(`huddle with hr - ${njNameLower}`)
+            e.subject.includes(`huddle with hr - ${njFirstNameLower}`)
           );
 
           let completed = false;

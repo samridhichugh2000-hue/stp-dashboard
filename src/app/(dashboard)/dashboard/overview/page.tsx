@@ -5,304 +5,336 @@ import { useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Doc, Id } from "@/../convex/_generated/dataModel";
 const TODAY = new Date().toISOString().split("T")[0];
-import { NJCard } from "@/components/panels/overview/NJCard";
 import { HuddleLog } from "@/components/panels/overview/HuddleLog";
-import { DayTaskTracker } from "@/components/panels/overview/DayTaskTracker";
+import { DayTaskTracker, HuddleStatus } from "@/components/panels/overview/DayTaskTracker";
 import { ExportButton } from "@/components/shared/ExportButton";
-import { StatCard } from "@/components/shared/StatCard";
-import { Users, CheckCircle2, Activity, Search, X, Building2, MapPin, Mail, BadgeCheck, Hash, UserCircle2, CalendarDays, Clock } from "lucide-react";
+import {
+  Users, Search, X,
+  Building2, MapPin, Mail, Hash, UserCircle2, CalendarDays, ChevronRight,
+} from "lucide-react";
+
+// ── Display category ──────────────────────────────────────────────────────────
+
+type DisplayCategory = "Developed" | "Not Developed" | "New Joiner" | "Inactive";
+
+function getDisplayCategory(nj: Doc<"newJoiners">): DisplayCategory {
+  if (!nj.isActive) return "Inactive";
+  const daysSinceJoining = (Date.now() - new Date(nj.joinDate).getTime()) / 86_400_000;
+  if (daysSinceJoining < 30) return "New Joiner";
+  if (nj.category === "Developed") return "Developed";
+  return "Not Developed";
+}
+
+const CATEGORY_STYLE: Record<DisplayCategory, string> = {
+  "Developed":     "bg-emerald-100 text-emerald-700",
+  "Not Developed": "bg-red-100 text-red-600",
+  "New Joiner":    "bg-violet-100 text-violet-700",
+  "Inactive":      "bg-gray-100 text-gray-400",
+};
+
+const FILTER_OPTIONS: Array<DisplayCategory | "All"> = [
+  "All", "New Joiner", "Developed", "Not Developed", "Inactive",
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Count Mon–Fri days from DOJ+1 through today (inclusive). */
+function workingDaysSince(dojISO: string): number {
+  const doj = new Date(dojISO);
+  doj.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let count = 0;
+  const d = new Date(doj);
+  d.setDate(d.getDate() + 1);
+  while (d <= today) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
+function fmtDOJ(iso: string) {
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function fmtTenure(m: number) {
+  if (m < 1) return "< 1 mo";
+  if (m < 12) return `${m} mo`;
+  const yr = Math.floor(m / 12), mo = m % 12;
+  return mo > 0 ? `${yr}y ${mo}mo` : `${yr}y`;
+}
+
+function initials(name: string) {
+  return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function OverviewPage() {
-  const [selectedNJ, setSelectedNJ] = useState<Id<"newJoiners"> | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchedNJId, setSearchedNJId] = useState<Id<"newJoiners"> | null>(null);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const njs = useQuery(api.queries.newJoiners.list, {});
-  const alerts = useQuery(api.queries.performance.pendingAlerts);
-  const summary = useQuery(api.queries.performance.dashboardSummary);
-  const huddleLogs = useQuery(api.queries.huddleLogs.byNJ, selectedNJ ? { njId: selectedNJ } : "skip");
-  const huddleCompleted = huddleLogs?.some((log: Doc<"huddleLogs">) => log.date === TODAY && log.completed) ?? false;
+  const [selectedNJId, setSelectedNJId]     = useState<Id<"newJoiners"> | null>(null);
+  const [search, setSearch]                 = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<DisplayCategory | "All">("All");
 
-  // Loading skeleton
-  if (!njs || !summary) {
+  const njs        = useQuery(api.queries.newJoiners.list, { includeInactive: true });
+  const alerts     = useQuery(api.queries.performance.pendingAlerts);
+  const huddleLogs = useQuery(api.queries.huddleLogs.byNJ, selectedNJId ? { njId: selectedNJId } : "skip");
+
+  if (!njs) {
     return (
       <div className="space-y-6 animate-fade-in">
-        {/* Stat card skeletons */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="shimmer h-32 rounded-2xl" />
-          ))}
+          {[...Array(3)].map((_, i) => <div key={i} className="shimmer h-32 rounded-2xl" />)}
         </div>
-        {/* List skeletons */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="shimmer h-24 rounded-xl" />
-            ))}
-          </div>
-          <div className="lg:col-span-2 shimmer h-80 rounded-xl" />
-        </div>
+        <div className="shimmer h-96 rounded-2xl" />
       </div>
     );
   }
 
-  const activeNJ = njs.filter((n: Doc<"newJoiners">) => n.isActive);
-  const displayNJ = selectedNJ ? njs.find((n: Doc<"newJoiners">) => n._id === selectedNJ) : null;
+  // Sort: latest join date first; active before inactive at the same date
+  const allNJs = [...njs].sort((a: Doc<"newJoiners">, b: Doc<"newJoiners">) => {
+    const d = b.joinDate.localeCompare(a.joinDate);
+    if (d !== 0) return d;
+    return (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0);
+  });
+
+  const activeCount = allNJs.filter((n: Doc<"newJoiners">) => n.isActive).length;
+
+  const q = search.trim().toLowerCase();
+  const filteredNJs = allNJs.filter((n: Doc<"newJoiners">) => {
+    const matchesSearch =
+      !q ||
+      n.name.toLowerCase().includes(q) ||
+      (n.empId ?? "").toLowerCase().includes(q) ||
+      (n.managerId ?? "").toLowerCase().includes(q);
+    const matchesCategory =
+      categoryFilter === "All" || getDisplayCategory(n) === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
+
+  const selectedNJ = selectedNJId
+    ? allNJs.find((n: Doc<"newJoiners">) => n._id === selectedNJId) ?? null
+    : null;
+
+  // Only show huddle task for NJs within 15 working days of joining
+  const selectedNJWorkingDays = selectedNJ ? workingDaysSince(selectedNJ.joinDate) : 0;
+  const isInHuddleWindow = selectedNJWorkingDays < 15;
+
+  const todayHuddle = huddleLogs?.find((l: Doc<"huddleLogs">) => l.date === TODAY);
+  const huddleStatus: HuddleStatus =
+    todayHuddle?.completed ? "done" :
+    todayHuddle            ? "missed" :
+    "pending";
 
   return (
     <div className="space-y-6 animate-fade-in">
+
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">NJ Overview</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Monitor your new joiner pipeline in real time
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            NJ Overview
+            <span className="ml-3 text-base font-medium text-gray-400">{activeCount} Active CSMs</span>
+          </h1>
+          <p className="text-sm text-gray-500 mt-0.5">Monitor your new joiner pipeline in real time</p>
         </div>
         <ExportButton />
       </div>
 
-      {/* ── KPI Stat Cards ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 stagger">
-        <StatCard
-          label="Total CSMs"
-          value={activeNJ.length}
-          subtitle="Trainings initiated"
-          icon={<Users size={20} />}
-          gradient="from-indigo-500 to-violet-600"
-          animationDelay={0}
-        />
-        <StatCard
-          label="STPs Completed"
-          value={24}
-          subtitle="Training programmes finished"
-          icon={<CheckCircle2 size={20} />}
-          gradient="from-emerald-500 to-teal-600"
-          animationDelay={60}
-        />
-        <StatCard
-          label="STPs Active"
-          value={5}
-          subtitle="Currently in progress"
-          icon={<Activity size={20} />}
-          gradient="from-amber-500 to-orange-600"
-          animationDelay={120}
-        />
-      </div>
+      {/* ── Table + Detail Panel ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-      {/* ── Phase distribution bar ──────────────────────────────────────── */}
-      <div className="animate-slide-up bg-white rounded-2xl border border-gray-100 p-5 shadow-sm" style={{ animationDelay: "240ms" }}>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Phase Distribution</p>
-        <div className="flex items-center gap-3">
-          {(["Orientation", "Training", "Field", "Graduated"] as const).map((phase, idx) => {
-            const count = summary.byPhase[phase] ?? 0;
-            const pct = summary.activeNJs > 0 ? Math.round((count / summary.activeNJs) * 100) : 0;
-            const colors = [
-              "from-purple-400 to-purple-500",
-              "from-sky-400 to-sky-500",
-              "from-emerald-400 to-emerald-500",
-              "from-gray-300 to-gray-400",
-            ];
-            const textColors = ["text-purple-700", "text-sky-700", "text-emerald-700", "text-gray-600"];
-            const bgColors = ["bg-purple-50", "bg-sky-50", "bg-emerald-50", "bg-gray-50"];
-            return (
-              <div key={phase} className="flex-1">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className={`text-xs font-medium ${textColors[idx]}`}>
-                    {phase}
-                    <span className="font-normal text-[10px] ml-1 opacity-60">
-                      {phase === "Orientation" ? "(< 1 mo)" : phase === "Training" ? "(1–3 mo)" : phase === "Field" ? "(3–6 mo)" : "(6+ mo)"}
-                    </span>
-                  </span>
-                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${bgColors[idx]} ${textColors[idx]}`}>{count}</span>
-                </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full bg-gradient-to-r ${colors[idx]} bar-fill`}
-                    style={{ "--bar-width": `${pct}%` } as React.CSSProperties}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+        {/* Left: table */}
+        <div className="lg:col-span-2 space-y-3">
 
-      {/* ── CSM Search + Profile ────────────────────────────────────────── */}
-      {(() => {
-        const filtered = searchQuery.trim().length > 0
-          ? activeNJ.filter((n: Doc<"newJoiners">) =>
-              n.name.toLowerCase().includes(searchQuery.toLowerCase())
-            )
-          : [];
-        const searchedNJ = searchedNJId ? activeNJ.find((n: Doc<"newJoiners">) => n._id === searchedNJId) : null;
-
-        const fmtDOJ = (iso: string) =>
-          new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-        const fmtTenure = (m: number) => {
-          if (m < 1) return "< 1 month";
-          if (m < 12) return `${m} month${m !== 1 ? "s" : ""}`;
-          const yr = Math.floor(m / 12), mo = m % 12;
-          return mo > 0 ? `${yr} yr ${mo} mo` : `${yr} yr`;
-        };
-
-        const profileFields = searchedNJ ? [
-          { icon: <Hash size={14} />,         label: "Emp ID",      value: searchedNJ.empId },
-          { icon: <UserCircle2 size={14} />,  label: "Manager",     value: searchedNJ.managerId },
-          { icon: <MapPin size={14} />,       label: "Location",    value: searchedNJ.location },
-          { icon: <Building2 size={14} />,    label: "Department",  value: searchedNJ.department },
-          { icon: <BadgeCheck size={14} />,   label: "Designation", value: searchedNJ.designation },
-          { icon: <Mail size={14} />,         label: "Email",       value: searchedNJ.email },
-          { icon: <CalendarDays size={14} />, label: "DOJ",         value: fmtDOJ(searchedNJ.joinDate) },
-          { icon: <Clock size={14} />,        label: "Tenure",      value: fmtTenure(searchedNJ.tenureMonths) },
-        ] : [];
-
-        return (
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">CSM Lookup for more details</p>
-
-            {/* Search input */}
-            <div className="relative">
-              <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-indigo-300 focus-within:border-indigo-400 transition-all bg-gray-50">
-                <Search size={15} className="text-gray-400 flex-shrink-0" />
-                <input
-                  type="text"
-                  placeholder="Search CSM by name…"
-                  value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setDropdownOpen(true); }}
-                  onFocus={() => setDropdownOpen(true)}
-                  onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
-                  className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none"
-                />
-                {(searchQuery || searchedNJ) && (
-                  <button onClick={() => { setSearchQuery(""); setSearchedNJId(null); setDropdownOpen(false); }}>
-                    <X size={14} className="text-gray-400 hover:text-gray-600" />
-                  </button>
-                )}
-              </div>
-
-              {/* Dropdown */}
-              {dropdownOpen && filtered.length > 0 && (
-                <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
-                  {filtered.slice(0, 8).map((n: Doc<"newJoiners">) => (
-                    <button
-                      key={n._id}
-                      onMouseDown={() => {
-                        setSearchedNJId(n._id);
-                        setSearchQuery(n.name);
-                        setDropdownOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center gap-2"
-                    >
-                      <span className="font-medium">{n.name}</span>
-                      {n.designation && <span className="text-xs text-gray-400">· {n.designation}</span>}
-                    </button>
-                  ))}
-                </div>
+          {/* Search + category filter */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-indigo-300 focus-within:border-indigo-400 transition-all bg-gray-50">
+              <Search size={15} className="text-gray-400 flex-shrink-0" />
+              <input
+                type="text"
+                placeholder="Search by name, Emp ID or manager…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="flex-1 bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none"
+              />
+              {search && (
+                <button onClick={() => setSearch("")}>
+                  <X size={14} className="text-gray-400 hover:text-gray-600" />
+                </button>
               )}
             </div>
 
-            {/* Profile card */}
-            {searchedNJ && (
-              <div className="animate-scale-in border border-indigo-100 rounded-xl overflow-hidden">
-                {/* Header */}
-                <div className="bg-gradient-to-r from-indigo-600 to-violet-700 px-5 py-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                    {searchedNJ.name.split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase()}
+            {/* Category filter pills */}
+            <div className="flex flex-wrap gap-1.5">
+              {FILTER_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => setCategoryFilter(opt)}
+                  className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all border ${
+                    categoryFilter === opt
+                      ? "bg-indigo-600 text-white border-indigo-600"
+                      : "bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600"
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Sales New Joiners</h2>
+              <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{filteredNJs.length}</span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Name</th>
+                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Emp ID</th>
+                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Category</th>
+                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Tenure</th>
+                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Manager</th>
+                    <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Joined</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredNJs.map((nj: Doc<"newJoiners">) => {
+                    const isSelected = selectedNJId === nj._id;
+                    const hasAlert   = (alerts?.some((a: Doc<"performanceAlerts">) => a.njId === nj._id)) ?? false;
+                    const displayCat = getDisplayCategory(nj);
+                    const catStyle   = CATEGORY_STYLE[displayCat];
+                    return (
+                      <tr
+                        key={nj._id}
+                        onClick={() => setSelectedNJId(isSelected ? null : nj._id)}
+                        className={`cursor-pointer border-b border-gray-50 last:border-0 transition-colors ${
+                          isSelected
+                            ? "bg-indigo-50"
+                            : nj.isActive
+                            ? "hover:bg-gray-50"
+                            : "bg-gray-50/60 hover:bg-gray-100/60"
+                        }`}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {hasAlert && <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />}
+                            <span className={`font-medium ${nj.isActive ? "text-gray-900" : "text-gray-400"}`}>
+                              {nj.name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 font-mono text-xs">{nj.empId ?? "—"}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold ${catStyle}`}>
+                            {displayCat}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtTenure(nj.tenureMonths)}</td>
+                        <td className="px-4 py-3 text-gray-500 max-w-[130px] truncate">{nj.managerId || "—"}</td>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDOJ(nj.joinDate)}</td>
+                        <td className="px-4 py-3">
+                          <ChevronRight size={14} className={`transition-colors ${isSelected ? "text-indigo-500" : "text-gray-300"}`} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredNJs.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-14 text-center text-gray-400 text-sm">
+                        No records found{search ? ` for "${search}"` : categoryFilter !== "All" ? ` in "${categoryFilter}"` : ""}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: detail panel */}
+        <div className="lg:col-span-1 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
+          {selectedNJ ? (
+            <div className="space-y-4 animate-scale-in">
+
+              {/* Header */}
+              <div className={`rounded-2xl p-5 text-white shadow-lg ${selectedNJ.isActive ? "bg-gradient-to-br from-indigo-600 to-violet-700" : "bg-gradient-to-br from-gray-500 to-gray-600"}`}>
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-white/20 flex items-center justify-center text-base font-bold flex-shrink-0">
+                    {initials(selectedNJ.name)}
                   </div>
-                  <div>
-                    <p className="text-white font-bold text-sm">{searchedNJ.name}</p>
-                    {searchedNJ.designation && <p className="text-indigo-200 text-xs mt-0.5">{searchedNJ.designation}</p>}
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold leading-snug">{selectedNJ.name}</h3>
+                    {selectedNJ.designation && (
+                      <p className="text-white/70 text-xs mt-0.5">{selectedNJ.designation}</p>
+                    )}
+                    <p className="text-white/50 text-xs mt-1">
+                      Joined {fmtDOJ(selectedNJ.joinDate)} · {fmtTenure(selectedNJ.tenureMonths)}
+                    </p>
                   </div>
                 </div>
-                {/* Fields grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-gray-100">
-                  {profileFields.map(({ icon, label, value }) => (
-                    <div key={label} className="bg-white px-4 py-3">
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  <span className="px-2.5 py-1 rounded-full bg-white/20 text-xs font-semibold">{selectedNJ.currentPhase}</span>
+                  <span className="px-2.5 py-1 rounded-full bg-white/20 text-xs font-semibold">{getDisplayCategory(selectedNJ)}</span>
+                </div>
+              </div>
+
+              {/* Profile fields */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Profile</p>
+                </div>
+                <div className="grid grid-cols-2 gap-px bg-gray-100">
+                  {([
+                    { icon: <Hash size={12} />,         label: "Emp ID",      value: selectedNJ.empId },
+                    { icon: <UserCircle2 size={12} />,  label: "Manager",     value: selectedNJ.managerId },
+                    { icon: <MapPin size={12} />,       label: "Location",    value: selectedNJ.location },
+                    { icon: <Building2 size={12} />,    label: "Department",  value: selectedNJ.department },
+                    { icon: <Mail size={12} />,         label: "Email",       value: selectedNJ.email },
+                    { icon: <CalendarDays size={12} />, label: "DOJ",         value: fmtDOJ(selectedNJ.joinDate) },
+                  ] as { icon: React.ReactNode; label: string; value: string | undefined }[]).map(({ icon, label, value }) => (
+                    <div key={label} className="bg-white px-3 py-2.5">
                       <div className="flex items-center gap-1.5 text-gray-400 mb-1">
                         {icon}
-                        <span className="text-[10px] font-semibold uppercase tracking-wider">{label}</span>
+                        <span className="text-[9px] font-semibold uppercase tracking-wider">{label}</span>
                       </div>
-                      <p className="text-sm font-medium text-gray-800 truncate">
+                      <p className="text-xs font-medium text-gray-800 truncate">
                         {value || <span className="text-gray-300">—</span>}
                       </p>
                     </div>
                   ))}
                 </div>
               </div>
-            )}
-          </div>
-        );
-      })()}
 
-      {/* ── NJ List + Detail panel ──────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* NJ cards list */}
-        <div className="lg:col-span-1">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-widest">New Joiners</h2>
-            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">{activeNJ.length}</span>
-          </div>
-          <div className="space-y-2 stagger">
-            {activeNJ.map((nj: Doc<"newJoiners">) => {
-              const njAlerts = alerts?.filter((a: Doc<"performanceAlerts">) => a.njId === nj._id) ?? [];
-              return (
-                <NJCard
-                  key={nj._id}
-                  nj={nj}
-                  alerts={njAlerts}
-                  selected={selectedNJ === nj._id}
-                  onClick={() => setSelectedNJ(selectedNJ === nj._id ? null : nj._id)}
-                />
-              );
-            })}
-          </div>
-        </div>
+              {selectedNJ.isActive && (
+                <>
+                  <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                    <DayTaskTracker huddleStatus={isInHuddleWindow ? huddleStatus : undefined} />
+                  </div>
+                  <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                    <HuddleLog njId={selectedNJId!} />
+                  </div>
+                </>
+              )}
 
-        {/* Detail panel — sticky so it stays visible when NJ list is scrolled */}
-        <div className="lg:col-span-2 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto">
-          {selectedNJ && displayNJ ? (
-            <div className="space-y-4 animate-scale-in">
-              {/* NJ header card */}
-              <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-2xl p-5 text-white shadow-lg">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-lg font-bold">
-                    {displayNJ.name.split(" ").map((p: string) => p[0]).join("").slice(0, 2)}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold">{displayNJ.name}</h3>
-                    {displayNJ.designation && (
-                      <p className="text-indigo-100 text-xs font-medium mt-0.5">{displayNJ.designation}</p>
-                    )}
-                    <p className="text-indigo-200 text-sm mt-0.5">
-                      Joined {new Date(displayNJ.joinDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                      · {displayNJ.tenureMonths} months tenure
-                    </p>
-                  </div>
-                  <div className="ml-auto flex gap-2">
-                    <span className="px-3 py-1 rounded-full bg-white/20 text-xs font-semibold">{displayNJ.currentPhase}</span>
-                    <span className="px-3 py-1 rounded-full bg-white/20 text-xs font-semibold">{displayNJ.category}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-                <DayTaskTracker huddleCompleted={huddleCompleted} />
-              </div>
-              <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-                <HuddleLog njId={selectedNJ} />
-              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-80 bg-white rounded-2xl border border-dashed border-gray-200 text-center p-8">
               <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mb-4">
                 <Users size={28} className="text-indigo-400" />
               </div>
-              <p className="text-gray-700 font-semibold">Select a New Joiner</p>
-              <p className="text-sm text-gray-400 mt-1">Click any card on the left to view their details, tasks and huddle logs.</p>
+              <p className="text-gray-700 font-semibold">Select a record</p>
+              <p className="text-sm text-gray-400 mt-1">Click any row to view profile, tasks and huddle logs.</p>
             </div>
           )}
         </div>
+
       </div>
     </div>
   );

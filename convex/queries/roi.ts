@@ -4,7 +4,7 @@ import { v } from "convex/values";
 /**
  * Current ROI summary per CSM.
  * When live API data is present (roiRecords with fromDate/toDate), uses that.
- * Falls back to the sheet's INR total or summed nrRecords otherwise.
+ * Falls back to the summed nrRecords total otherwise.
  */
 export const currentROISummary = query({
   args: {},
@@ -35,9 +35,7 @@ export const currentROISummary = query({
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((nj) => {
         const roi = latestRoi.get(nj._id);
-        const fallbackNR = nj.totalNR !== undefined
-          ? nj.totalNR
-          : (totals.has(nj._id) ? totals.get(nj._id)! : null);
+        const fallbackNR = totals.has(nj._id) ? totals.get(nj._id)! : null;
         return {
           _id: nj._id,
           name: nj.name,
@@ -57,9 +55,8 @@ export const currentROISummary = query({
 
 /**
  * Monthly status grid for the "ROI Status of CSMs" page.
- * Reads directly from nrRecords so each cell shows the exact value
- * from the Google Sheet. Missing months are returned as-is (absent from
- * records), letting the UI show "NA".
+ * Reads directly from nrRecords so each cell shows the exact monthly NR value.
+ * Missing months are returned as-is (absent from records), letting the UI show "NA".
  */
 export const monthlyStatusGrid = query({
   args: {},

@@ -19,9 +19,6 @@ crons.weekly(
   internal.actions.syncROI.syncROI
 );
 
-// Sync RCB every 60 minutes
-crons.interval("syncRCB", { minutes: 60 }, internal.actions.syncRCB.syncRCB);
-
 // Evaluate milestones daily at 02:00 IST (20:30 UTC previous day)
 crons.daily(
   "evaluateMilestones",
@@ -31,13 +28,6 @@ crons.daily(
 
 // Sync CSMs from live API daily at 05:30 IST (midnight UTC)
 crons.daily("syncCSM", { hourUTC: 0, minuteUTC: 0 }, internal.actions.syncCSMFromAPI.syncCSMFromAPI);
-
-// Sync Google Sheets every hour (ROI, RCB only — NJ sync is now via syncCSMFromAPI)
-crons.interval(
-  "syncGoogleSheets",
-  { hours: 1 },
-  internal.actions.syncGoogleSheets.syncGoogleSheets
-);
 
 // Sync Teams huddle attendance daily at 09:30 IST (04:00 UTC)
 crons.daily(
