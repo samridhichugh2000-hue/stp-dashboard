@@ -85,21 +85,8 @@ export const syncGoogleSheets = internalAction({
         count++;
       }
 
-      // ── 2. Upsert NR Records ───────────────────────────────────────────────
-      const nrRecords = await client.fetchNR();
-      for (const r of nrRecords) {
-        await ctx.runMutation(internal.mutations.nr.upsertNR, {
-          njId: r.njId,
-          month: r.month,
-          year: r.year,
-          nrValue: r.nrValue,
-          isPositive: r.isPositive,
-          source: r.source,
-        });
-        count++;
-      }
-
-      // ── 3. Upsert ROI Records ──────────────────────────────────────────────
+      // ── 2. Upsert ROI Records ──────────────────────────────────────────────
+      // Note: NR data is now sourced from the live API (syncNRFromAPI action).
       const roiRecords = await client.fetchROI();
       for (const r of roiRecords) {
         await ctx.runMutation(internal.mutations.roi.upsertROI, {
@@ -111,7 +98,7 @@ export const syncGoogleSheets = internalAction({
         count++;
       }
 
-      // ── 4. Upsert RCB Records ──────────────────────────────────────────────
+      // ── 3. Upsert RCB Records ──────────────────────────────────────────────
       const rcbRecords = await client.fetchRCB();
       for (const r of rcbRecords) {
         await ctx.runMutation(internal.mutations.rcb.upsertRCB, {
@@ -124,7 +111,7 @@ export const syncGoogleSheets = internalAction({
         count++;
       }
 
-      // ── 5. Re-evaluate categories based on fresh NR/ROI data ─────────────
+      // ── 4. Re-evaluate categories based on fresh ROI data ────────────────
       await ctx.runAction(internal.actions.evaluateCategories.evaluateCategories, {});
 
       await ctx.runMutation(internal.mutations.syncLogs.upsertLog, {

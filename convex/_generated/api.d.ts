@@ -16,6 +16,7 @@ import type * as actions_searchROI from "../actions/searchROI.js";
 import type * as actions_syncGoogleSheets from "../actions/syncGoogleSheets.js";
 import type * as actions_syncLeads from "../actions/syncLeads.js";
 import type * as actions_syncNR from "../actions/syncNR.js";
+import type * as actions_syncNRFromAPI from "../actions/syncNRFromAPI.js";
 import type * as actions_syncQubits from "../actions/syncQubits.js";
 import type * as actions_syncRCB from "../actions/syncRCB.js";
 import type * as actions_syncROI from "../actions/syncROI.js";
@@ -66,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   "actions/syncGoogleSheets": typeof actions_syncGoogleSheets;
   "actions/syncLeads": typeof actions_syncLeads;
   "actions/syncNR": typeof actions_syncNR;
+  "actions/syncNRFromAPI": typeof actions_syncNRFromAPI;
   "actions/syncQubits": typeof actions_syncQubits;
   "actions/syncRCB": typeof actions_syncRCB;
   "actions/syncROI": typeof actions_syncROI;

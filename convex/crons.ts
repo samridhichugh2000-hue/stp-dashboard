@@ -9,8 +9,8 @@ crons.interval("syncQubits", { minutes: 15 }, internal.actions.syncQubits.syncQu
 // Sync Leads every 30 minutes
 crons.interval("syncLeads", { minutes: 30 }, internal.actions.syncLeads.syncLeads);
 
-// Sync NR daily at 01:00 IST (UTC+5:30 → 19:30 UTC previous day)
-crons.daily("syncNR", { hourUTC: 19, minuteUTC: 30 }, internal.actions.syncNR.syncNR);
+// Sync NR from live API daily at 01:00 IST (UTC+5:30 → 19:30 UTC previous day)
+crons.daily("syncNR", { hourUTC: 19, minuteUTC: 30 }, internal.actions.syncNRFromAPI.syncNRFromAPI);
 
 // Sync ROI every Monday at 06:00 IST (00:30 UTC Monday)
 crons.weekly(
