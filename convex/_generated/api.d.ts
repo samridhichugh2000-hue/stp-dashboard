@@ -13,6 +13,7 @@ import type * as actions_evaluateMilestones from "../actions/evaluateMilestones.
 import type * as actions_koenigApi from "../actions/koenigApi.js";
 import type * as actions_purgeNonSheetData from "../actions/purgeNonSheetData.js";
 import type * as actions_searchROI from "../actions/searchROI.js";
+import type * as actions_syncCSMFromAPI from "../actions/syncCSMFromAPI.js";
 import type * as actions_syncGoogleSheets from "../actions/syncGoogleSheets.js";
 import type * as actions_syncLeads from "../actions/syncLeads.js";
 import type * as actions_syncNR from "../actions/syncNR.js";
@@ -64,6 +65,7 @@ declare const fullApi: ApiFromModules<{
   "actions/koenigApi": typeof actions_koenigApi;
   "actions/purgeNonSheetData": typeof actions_purgeNonSheetData;
   "actions/searchROI": typeof actions_searchROI;
+  "actions/syncCSMFromAPI": typeof actions_syncCSMFromAPI;
   "actions/syncGoogleSheets": typeof actions_syncGoogleSheets;
   "actions/syncLeads": typeof actions_syncLeads;
   "actions/syncNR": typeof actions_syncNR;

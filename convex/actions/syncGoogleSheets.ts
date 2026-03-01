@@ -1,12 +1,11 @@
 "use node";
 /**
  * Sync action for Google Sheets integration.
- * Reads GOOGLE_SHEET_ID from Convex environment variables.
+ * Syncs ROI and RCB records only. NJ sync is now handled by syncCSMFromAPI.
  *
  * Run once manually via Convex dashboard, or let the cron fire every hour.
  * Set env vars in Convex:
  *   npx convex env set GOOGLE_SHEET_ID <your-sheet-id>
- *   npx convex env set CONVEX_RMS_MODE sheets
  */
 
 import { internalAction } from "../_generated/server";
@@ -14,33 +13,6 @@ import { internal } from "../_generated/api";
 import { GoogleSheetsRMSClient } from "../rms/googleSheetsClient";
 
 const MODULE = "sheets";
-
-function tenureMonths(joinDateISO: string): number {
-  const join = new Date(joinDateISO);
-  const today = new Date();
-  return Math.max(
-    0,
-    (today.getFullYear() - join.getFullYear()) * 12 + (today.getMonth() - join.getMonth())
-  );
-}
-
-function derivePhase(months: number): "Orientation" | "Training" | "Field" | "Graduated" {
-  if (months < 1) return "Orientation";
-  if (months < 3) return "Training";
-  if (months < 6) return "Field";
-  return "Graduated";
-}
-
-function deriveCategory(
-  status: string
-): "Developed" | "Performer" | "Performance Falling" | "Non-Performer" | "Uncategorised" {
-  switch (status.toLowerCase().trim()) {
-    case "green":  return "Developed";
-    case "yellow": return "Performance Falling";
-    case "red":    return "Non-Performer";
-    default:       return "Uncategorised";
-  }
-}
 
 export const syncGoogleSheets = internalAction({
   args: {},
@@ -62,31 +34,8 @@ export const syncGoogleSheets = internalAction({
     });
 
     try {
-      // ── 1. Upsert New Joiners ──────────────────────────────────────────────
-      const njs = await client.fetchNewJoiners();
-      for (const nj of njs) {
-        const months = tenureMonths(nj.joinDate);
-        await ctx.runMutation(internal.mutations.newJoiners.upsertNewJoiner, {
-          empId: nj.empId,
-          name: nj.name,
-          department: nj.department,
-          managerName: nj.managerName,
-          location: nj.location,
-          email: nj.email,
-          joinDate: nj.joinDate,
-          tenureMonths: months,
-          currentPhase: derivePhase(months),
-          category: deriveCategory(nj.status),
-          designation: nj.designation,
-          claimedCorporates: nj.claimedCorporates,
-          nrFromCorporates: nj.nrFromCorporates,
-          totalNR: nj.totalNR,
-        });
-        count++;
-      }
-
-      // ── 2. Upsert ROI Records ──────────────────────────────────────────────
-      // Note: NR data is now sourced from the live API (syncNRFromAPI action).
+      // ── 1. Upsert ROI Records ──────────────────────────────────────────────
+      // Note: NJ sync is handled by syncCSMFromAPI; NR sync by syncNRFromAPI.
       const roiRecords = await client.fetchROI();
       for (const r of roiRecords) {
         await ctx.runMutation(internal.mutations.roi.upsertROI, {
@@ -98,7 +47,7 @@ export const syncGoogleSheets = internalAction({
         count++;
       }
 
-      // ── 3. Upsert RCB Records ──────────────────────────────────────────────
+      // ── 2. Upsert RCB Records ──────────────────────────────────────────────
       const rcbRecords = await client.fetchRCB();
       for (const r of rcbRecords) {
         await ctx.runMutation(internal.mutations.rcb.upsertRCB, {
@@ -111,7 +60,7 @@ export const syncGoogleSheets = internalAction({
         count++;
       }
 
-      // ── 4. Re-evaluate categories based on fresh ROI data ────────────────
+      // ── 3. Re-evaluate categories based on fresh ROI data ────────────────
       await ctx.runAction(internal.actions.evaluateCategories.evaluateCategories, {});
 
       await ctx.runMutation(internal.mutations.syncLogs.upsertLog, {

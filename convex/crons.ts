@@ -29,7 +29,10 @@ crons.daily(
   internal.actions.evaluateMilestones.evaluateMilestones
 );
 
-// Sync Google Sheets every hour (NJs, NR, ROI, RCB)
+// Sync CSMs from live API daily at 05:30 IST (midnight UTC)
+crons.daily("syncCSM", { hourUTC: 0, minuteUTC: 0 }, internal.actions.syncCSMFromAPI.syncCSMFromAPI);
+
+// Sync Google Sheets every hour (ROI, RCB only — NJ sync is now via syncCSMFromAPI)
 crons.interval(
   "syncGoogleSheets",
   { hours: 1 },

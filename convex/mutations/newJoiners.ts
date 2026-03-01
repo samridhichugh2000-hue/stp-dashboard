@@ -21,13 +21,13 @@ export const upsertNewJoiner = internalMutation({
       v.literal("Field"),
       v.literal("Graduated")
     ),
-    category: v.union(
+    category: v.optional(v.union(
       v.literal("Developed"),
       v.literal("Performer"),
       v.literal("Performance Falling"),
       v.literal("Non-Performer"),
       v.literal("Uncategorised")
-    ),
+    )),
     designation: v.optional(v.string()),
     claimedCorporates: v.optional(v.number()),
     nrFromCorporates: v.optional(v.number()),
@@ -39,7 +39,7 @@ export const upsertNewJoiner = internalMutation({
       .withIndex("by_emp_id", (q) => q.eq("empId", args.empId))
       .first();
 
-    const fields = {
+    const baseFields = {
       name: args.name,
       empId: args.empId,
       department: args.department,
@@ -49,7 +49,6 @@ export const upsertNewJoiner = internalMutation({
       joinDate: args.joinDate,
       tenureMonths: args.tenureMonths,
       currentPhase: args.currentPhase,
-      category: args.category,
       isActive: true,
       designation: args.designation,
       claimedCorporates: args.claimedCorporates,
@@ -58,9 +57,16 @@ export const upsertNewJoiner = internalMutation({
     };
 
     if (existing) {
-      await ctx.db.patch(existing._id, fields);
+      // Only overwrite category if explicitly provided; preserve existing otherwise
+      const patch = args.category !== undefined
+        ? { ...baseFields, category: args.category }
+        : baseFields;
+      await ctx.db.patch(existing._id, patch);
     } else {
-      await ctx.db.insert("newJoiners", fields);
+      await ctx.db.insert("newJoiners", {
+        ...baseFields,
+        category: args.category ?? "Uncategorised",
+      });
     }
   },
 });
@@ -103,5 +109,25 @@ export const updatePhase = mutation({
   },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.njId, { currentPhase: args.phase });
+  },
+});
+
+/**
+ * Deactivate all currently-active NJs whose empId is NOT in the provided list.
+ * Called after a full API sync to mark removed CSMs as inactive.
+ */
+export const deactivateNJsExcept = internalMutation({
+  args: { empIds: v.array(v.string()) },
+  handler: async (ctx, { empIds }) => {
+    const empIdSet = new Set(empIds);
+    const allActive = await ctx.db
+      .query("newJoiners")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .collect();
+    for (const nj of allActive) {
+      if (nj.empId && !empIdSet.has(nj.empId)) {
+        await ctx.db.patch(nj._id, { isActive: false });
+      }
+    }
   },
 });
