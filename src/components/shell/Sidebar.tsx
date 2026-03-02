@@ -6,7 +6,6 @@ import { clsx } from "clsx";
 import {
   LayoutDashboard,
   Mic2,
-  Users2,
   TrendingUp,
   BarChart3,
   Building2,
@@ -44,13 +43,6 @@ const navItems: NavItem[] = [
     color: "from-violet-400 to-violet-600",
   },
   {
-    label: "Leads",
-    href: "/dashboard/leads",
-    icon: <Users2 size={17} />,
-    roles: ["admin", "manager", "viewer"],
-    color: "from-sky-400 to-sky-600",
-  },
-  {
     label: "NRD",
     href: "/dashboard/nrd",
     icon: <TrendingUp size={17} />,
@@ -58,7 +50,7 @@ const navItems: NavItem[] = [
     color: "from-emerald-400 to-emerald-600",
   },
   {
-    label: "ROI",
+    label: "ROI & Leads",
     href: "/dashboard/roi",
     icon: <BarChart3 size={17} />,
     roles: ["admin", "manager", "viewer"],

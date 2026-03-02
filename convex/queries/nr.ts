@@ -82,6 +82,30 @@ export const nrdStats = query({
   },
 });
 
+/**
+ * Returns the most recent NR record for every NJ in one query.
+ * Used by the overview table to display NRD without N+1 fetches.
+ */
+export const latestPerNJ = query({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("nrRecords").collect();
+    const latestMap = new Map<string, typeof all[0]>();
+    for (const record of all) {
+      const key = record.njId as string;
+      const existing = latestMap.get(key);
+      if (
+        !existing ||
+        record.year > existing.year ||
+        (record.year === existing.year && record.month > existing.month)
+      ) {
+        latestMap.set(key, record);
+      }
+    }
+    return Array.from(latestMap.values());
+  },
+});
+
 export const lastMonthForNJ = internalQuery({
   args: { njId: v.id("newJoiners") },
   handler: async (ctx, args) => {

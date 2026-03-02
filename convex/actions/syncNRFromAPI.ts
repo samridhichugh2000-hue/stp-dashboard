@@ -176,6 +176,26 @@ export const syncNRFromAPI = internalAction({
         }
       }
 
+      // Diagnostic: cross-reference API empIds vs NJ empIds in DB
+      const apiEmpIds = [...new Set([...aggregated.values()].map(r => r.empId))].sort();
+      console.log(`[syncNRFromAPI] EmpIds from CCE API (${apiEmpIds.length}): ${apiEmpIds.join(", ")}`);
+
+      const allNJs = await ctx.runQuery(internal.queries.newJoiners.listAllInternal, {});
+      const njEmpIdSet = new Set(allNJs.map((nj) => nj.empId).filter(Boolean));
+
+      const unmatchedApiIds = apiEmpIds.filter(id => !njEmpIdSet.has(id));
+      if (unmatchedApiIds.length > 0) {
+        console.log(`[syncNRFromAPI] ${unmatchedApiIds.length} CCE EmpIds NOT in newJoiners table: ${unmatchedApiIds.join(", ")}`);
+      }
+
+      const njsWithNoNRData = allNJs.filter(nj => nj.empId && !new Set(apiEmpIds).has(nj.empId));
+      if (njsWithNoNRData.length > 0) {
+        console.log(
+          `[syncNRFromAPI] ${njsWithNoNRData.length} NJs have no CCE NR data: ` +
+          njsWithNoNRData.map(nj => `${nj.empId}:${nj.name}`).join(", ")
+        );
+      }
+
       // Upsert each aggregated record
       let count = 0;
       for (const record of aggregated.values()) {

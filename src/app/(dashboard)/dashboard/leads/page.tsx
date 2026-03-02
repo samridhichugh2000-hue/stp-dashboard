@@ -18,19 +18,49 @@ function toAPIDate(iso: string): string {
   return `${String(d.getDate()).padStart(2,"0")}-${MONTHS_ABBR[d.getMonth()]}-${d.getFullYear()}`;
 }
 
-function firstOfMonth(): string {
+function today(): string {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
-function lastOfMonth(): string {
+function thirtyDaysAgo(): string {
   const d = new Date();
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return `${last.getFullYear()}-${String(last.getMonth()+1).padStart(2,"0")}-${String(last.getDate()).padStart(2,"0")}`;
+  d.setDate(d.getDate() - 30);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
 function normName(s: string): string {
   return s.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The ROI API returns CCE names as "Full Name-ShortName" (e.g. "Rimpy Srivastava-Rimpy")
+ * and sometimes with middle names ("Tarun Kumar Dwivedi-Tarun" vs DB "Tarun Dwivedi").
+ * Returns multiple candidate normalized forms to maximise matching coverage.
+ */
+function normCCECandidates(cce: string): string[] {
+  const base = normName(cce);
+  const candidates = new Set<string>();
+  candidates.add(base);
+
+  // 1. Strip "-suffix" (API appends "-ShortName" after the full name)
+  const hyphenIdx = base.lastIndexOf("-");
+  const stripped = (hyphenIdx > 0 && base.slice(0, hyphenIdx).trim().includes(" "))
+    ? base.slice(0, hyphenIdx).trim()
+    : null;
+  if (stripped) candidates.add(stripped);
+
+  // 2. First + last word only (drops middle names)
+  function firstLast(s: string): string | null {
+    const words = s.split(/\s+/).filter(Boolean);
+    return words.length >= 3 ? `${words[0]} ${words[words.length - 1]}` : null;
+  }
+  const flBase    = firstLast(base);
+  const flStripped = stripped ? firstLast(stripped) : null;
+  if (flBase)     candidates.add(flBase);
+  if (flStripped) candidates.add(flStripped);
+
+  return [...candidates];
 }
 
 function fmtDOJ(iso: string): string {
@@ -49,11 +79,6 @@ function fmtTenure(months: number): string {
 function fmtINR(v: number): string {
   const sign = v < 0 ? "-" : "";
   return `${sign}${Math.abs(v).toLocaleString("en-IN")}`;
-}
-
-function currentMonthLabel(): string {
-  const d = new Date();
-  return `${MONTHS_ABBR[d.getMonth()]} ${d.getFullYear()}`;
 }
 
 // ── Session cache — persists across navigation via sessionStorage ─────────────
@@ -98,7 +123,7 @@ function flattenRow(r: RawApiRow): FlatRow {
   const regVal = r.Registration ?? r.Registrations ?? r.Reg ?? r.Registered ?? null;
 
   return {
-    cce:          String(cce).trim(),
+    cce:          String(cce).trim().replace(/\s+/g, " "),
     leads:        Number(r.Leads ?? 0),
     registration: regVal !== null ? Number(regVal) : null,
     roi:          Number(r.ROI ?? 0),
@@ -207,19 +232,31 @@ export default function LeadsPage() {
   const fetchROI = useAction(api.actions.koenigApi.getROIData);
   const njs      = useQuery(api.queries.newJoiners.list, {});
 
-  // Initialise from sessionStorage cache so returning users see data instantly
-  const [fromDate,   setFromDate]   = useState(() => readCache()?.fromDate ?? firstOfMonth());
-  const [toDate,     setToDate]     = useState(() => readCache()?.toDate   ?? lastOfMonth());
+  // Always default to last 30 days; cache only pre-populates the table while fresh data loads
+  const [fromDate,   setFromDate]   = useState(thirtyDaysAgo);
+  const [toDate,     setToDate]     = useState(today);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState<string | null>(null);
-  const [allRows,    setAllRows]    = useState<FlatRow[] | null>(() => readCache()?.rows ?? null);
+  // Start null (consistent SSR/client); populate from cache in useEffect to avoid hydration mismatch
+  const [allRows,    setAllRows]    = useState<FlatRow[] | null>(null);
   const [csmFilter,  setCsmFilter]  = useState<string>("all");
 
-  const njNameSet = new Set(
-    (njs ?? []).map((n: Doc<"newJoiners">) => normName(n.name))
-  );
+  // Load cached rows after mount — avoids server/client HTML mismatch
+  useEffect(() => {
+    const cached = readCache();
+    if (cached) setAllRows(cached.rows);
+  }, []);
 
-  // Lookup: normalized name → { joinDate, tenureMonths }
+  // Include first+last variants so middle-name differences don't block matching
+  const njNameSet = new Set<string>();
+  for (const n of (njs ?? [])) {
+    const base = normName(n.name);
+    njNameSet.add(base);
+    const words = base.split(/\s+/).filter(Boolean);
+    if (words.length >= 3) njNameSet.add(`${words[0]} ${words[words.length - 1]}`);
+  }
+
+  // Lookup: normalized name → { joinDate, tenureMonths, designation }
   const njMeta = new Map(
     (njs ?? []).map((n: Doc<"newJoiners">) => [
       normName(n.name),
@@ -227,12 +264,31 @@ export default function LeadsPage() {
     ])
   );
 
-  // Filter against dashboard CSMs — reactive
-  const rows = allRows
+  // Resolve meta for a CCE string, trying all candidate normalizations (handles "Name-Suffix" API format)
+  function getRowMeta(cce: string) {
+    for (const n of normCCECandidates(cce)) {
+      const m = njMeta.get(n);
+      if (m) return m;
+    }
+    return undefined;
+  }
+
+  // Don't filter until njs has loaded — avoids flash of all 126 unfiltered rows from cache
+  const matchedRows = allRows !== null && njs !== undefined
     ? (njNameSet.size > 0
-        ? allRows.filter(r => njNameSet.has(normName(r.cce)))
+        ? allRows.filter(r => normCCECandidates(r.cce).some(n => njNameSet.has(n)))
         : allRows)
     : null;
+
+  // NJs not in API response at all → add zero-lead rows so every NJ is visible
+  const matchedNormNames = new Set(
+    (matchedRows ?? []).flatMap(r => normCCECandidates(r.cce))
+  );
+  const zeroRows: FlatRow[] = (njs ?? [])
+    .filter((n: Doc<"newJoiners">) => !matchedNormNames.has(normName(n.name)))
+    .map((n: Doc<"newJoiners">) => ({ cce: n.name, leads: 0, registration: null, roi: 0 }));
+
+  const rows = matchedRows ? [...matchedRows, ...zeroRows] : null;
 
   // Selected CSM row
   const selectedRow = csmFilter !== "all" && rows
@@ -241,7 +297,14 @@ export default function LeadsPage() {
 
   // Table rows: if CSM selected, show only that one
   const tableRows = rows
-    ? (csmFilter === "all" ? [...rows].sort((a,b) => b.leads - a.leads) : rows.filter(r => r.cce === csmFilter))
+    ? (csmFilter === "all"
+        ? [...rows].sort((a, b) => {
+            const aDate = getRowMeta(a.cce)?.joinDate ?? "";
+            const bDate = getRowMeta(b.cce)?.joinDate ?? "";
+            if (bDate !== aDate) return bDate > aDate ? 1 : -1;
+            return b.leads - a.leads; // tie-break by leads
+          })
+        : rows.filter(r => r.cce === csmFilter))
     : [];
 
   const doFetch = useCallback(async (from: string, to: string) => {
@@ -272,8 +335,8 @@ export default function LeadsPage() {
   }, [fetchROI]);
 
   useEffect(() => {
-    // Skip auto-fetch if we already have cached data — user will see it instantly
-    if (!authLoading && isAuthenticated && !readCache()) {
+    // Always fetch on mount — cache shows stale data while the fresh request loads
+    if (!authLoading && isAuthenticated) {
       doFetch(fromDate, toDate);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -382,7 +445,7 @@ export default function LeadsPage() {
             <div className="bg-gradient-to-br from-indigo-400 to-violet-500 rounded-2xl p-5 text-white shadow-lg card-hover">
               <div className="text-xs font-medium text-white/70 mb-1">Total Leads Allocated</div>
               <div className="text-4xl font-black">{totalLeads}</div>
-              <div className="text-xs text-white/50 mt-1">{currentMonthLabel()}</div>
+              <div className="text-xs text-white/50 mt-1">{fromDate} → {toDate}</div>
             </div>
             <div className={clsx(
               "bg-gradient-to-br rounded-2xl p-5 text-white shadow-lg card-hover",
@@ -390,7 +453,7 @@ export default function LeadsPage() {
             )}>
               <div className="text-xs font-medium text-white/70 mb-1">Total ROI Earned</div>
               <div className="text-3xl font-black break-all">{fmtINR(totalROI)}</div>
-              <div className="text-xs text-white/50 mt-1">{currentMonthLabel()}</div>
+              <div className="text-xs text-white/50 mt-1">{fromDate} → {toDate}</div>
             </div>
           </div>
 
@@ -433,18 +496,18 @@ export default function LeadsPage() {
                         <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
                         <td className="py-2.5 px-3">
                           <p className="text-xs font-semibold text-gray-800 group-hover:text-indigo-700">{row.cce}</p>
-                          {njMeta.get(normName(row.cce))?.designation && (
-                            <p className="text-[10px] text-gray-400 mt-0.5">{njMeta.get(normName(row.cce))!.designation}</p>
+                          {getRowMeta(row.cce)?.designation && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">{getRowMeta(row.cce)!.designation}</p>
                           )}
                         </td>
                         <td className="py-2.5 px-3 text-xs text-gray-500 whitespace-nowrap">
-                          {njMeta.get(normName(row.cce))?.joinDate
-                            ? fmtDOJ(njMeta.get(normName(row.cce))!.joinDate)
+                          {getRowMeta(row.cce)?.joinDate
+                            ? fmtDOJ(getRowMeta(row.cce)!.joinDate)
                             : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="py-2.5 px-3 text-xs text-gray-500 whitespace-nowrap">
-                          {njMeta.get(normName(row.cce))?.tenureMonths !== undefined
-                            ? fmtTenure(njMeta.get(normName(row.cce))!.tenureMonths)
+                          {getRowMeta(row.cce)?.tenureMonths !== undefined
+                            ? fmtTenure(getRowMeta(row.cce)!.tenureMonths)
                             : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="py-2.5 px-3 text-right text-xs font-semibold text-indigo-600 tabular-nums">

@@ -28,9 +28,13 @@ function fmtTenure(months: number): string {
   return mo > 0 ? `${yr} yr ${mo} mo` : `${yr} yr`;
 }
 
+/**
+ * Developed = ROI positive AND (NR currently positive OR positive within first 4 months).
+ * Either metric negative → Not Developed.
+ * No data at all → null (no badge).
+ */
 function computeDev(nrPositiveMonth: number | null, roiStatus: NRROIStatus, nrStatus: NRROIStatus): boolean | null {
   if (!roiStatus && !nrStatus) return null;
-  // Developed: ROI positive AND NR was positive within first 4 months OR is currently positive
   const nrPositive = nrPositiveMonth !== null || nrStatus === "Positive";
   return roiStatus === "Positive" && nrPositive;
 }
@@ -107,6 +111,7 @@ const renderActiveShape = (props: Record<string, number & string>) => {
 
 export default function PerformancePage() {
   const [activeIdx, setActiveIdx] = useState(0);
+  const [search, setSearch] = useState("");
   const rows = useQuery(api.queries.performance.njPerformanceStatus);
 
   const enriched = rows?.map(row => {
@@ -118,14 +123,17 @@ export default function PerformancePage() {
     };
   });
 
+  const q = search.trim().toLowerCase();
+  const filtered = q ? enriched?.filter(r => r.name.toLowerCase().includes(q)) : enriched;
+
   const devCount    = enriched?.filter(r => r.dev === true).length  ?? 0;
   const notDevCount = enriched?.filter(r => r.dev === false).length ?? 0;
   const underObs    = enriched?.filter(r => r.suggestedAction === "Under Observation").length ?? 0;
   const pipCount    = enriched?.filter(r => r.suggestedAction === "PA/PIP Suggested").length ?? 0;
 
   const statCards = [
-    { label: "Developed",         value: devCount,    desc: "Both NR & ROI positive",  bg: "from-indigo-400 to-violet-500" },
-    { label: "Not Developed",     value: notDevCount, desc: "NR or ROI negative",       bg: "from-pink-400 to-rose-500" },
+    { label: "Developed",         value: devCount,    desc: "Both NR & ROI positive",   bg: "from-indigo-400 to-violet-500" },
+    { label: "Not Developed",     value: notDevCount, desc: "NR or ROI negative",        bg: "from-pink-400 to-rose-500" },
     { label: "Under Observation", value: underObs,    desc: "Negative within 4 months", bg: "from-purple-400 to-indigo-500" },
     { label: "PA/PIP Suggested",  value: pipCount,    desc: "Negative beyond 4 months", bg: "from-rose-500 to-red-600" },
   ];
@@ -154,7 +162,7 @@ export default function PerformancePage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">NJ Performance Status</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Development status, suggested actions and corporate claims per CSM</p>
+        <p className="text-sm text-gray-500 mt-0.5">Development status and suggested actions per CSM</p>
       </div>
 
       {/* Stat cards */}
@@ -172,6 +180,26 @@ export default function PerformancePage() {
 
       {/* Table */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        {/* Search */}
+        <div className="relative mb-4">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search CSM by name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white placeholder-gray-400 transition-colors"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
         <h2 className="text-sm font-semibold text-gray-700 mb-4">CSM Performance Breakdown</h2>
         {rows ? (
           <div className="overflow-x-auto">
@@ -183,13 +211,12 @@ export default function PerformancePage() {
                   <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-500">Tenure</th>
                   <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">NR Status</th>
                   <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">ROI Status</th>
-                  <th className="text-right py-2.5 px-3 text-xs font-semibold text-gray-500">Corporates Claimed</th>
                   <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">Status</th>
                   <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">Suggested Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {enriched?.map((row, i) => (
+                {filtered?.map((row, i) => (
                   <tr key={row._id} className="hover:bg-gray-50/60 transition-colors group">
                     <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
                     <td className="py-2.5 px-3">
@@ -199,9 +226,6 @@ export default function PerformancePage() {
                     <td className="py-2.5 px-3 text-xs text-gray-400">{fmtTenure(row.tenureMonths)}</td>
                     <td className="py-2.5 px-3 text-center"><NRStatusBadge status={row.nrStatus} positiveMonth={row.nrPositiveMonth} /></td>
                     <td className="py-2.5 px-3 text-center"><NRROIBadge status={row.roiStatus} /></td>
-                    <td className="py-2.5 px-3 text-right text-xs font-semibold text-gray-700 tabular-nums">
-                      {row.claimedCorporates > 0 ? row.claimedCorporates : <span className="text-gray-300">—</span>}
-                    </td>
                     <td className="py-2.5 px-3 text-center"><StatusBadge dev={row.dev} tenure={row.tenureMonths} /></td>
                     <td className="py-2.5 px-3 text-center"><ActionBadge action={row.suggestedAction} /></td>
                   </tr>

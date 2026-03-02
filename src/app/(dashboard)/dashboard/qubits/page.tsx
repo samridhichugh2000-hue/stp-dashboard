@@ -29,9 +29,10 @@ export default function QubitsPage() {
     );
   }
 
-  // Position-based status: rows 1–21 and 23–25 (0-indexed: 0–20, 22–24) = Completed; rest = Pending
+  const COMPLETED_COUNT = 40;
+
   function qubitStatus(idx: number): "Completed" | "Pending" {
-    return (idx <= 20 || (idx >= 22 && idx <= 24)) ? "Completed" : "Pending";
+    return idx < COMPLETED_COUNT ? "Completed" : "Pending";
   }
 
   const selectedCSM      = selectedNJId ? summary.find((r) => r._id === selectedNJId) : null;
@@ -60,11 +61,11 @@ export default function QubitsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 stagger">
         <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-white shadow-lg card-hover">
           <div className="text-xs font-medium text-white/70 mb-2">CSMs Completed Qubits</div>
-          <div className="text-4xl font-black">24</div>
+          <div className="text-4xl font-black">{COMPLETED_COUNT}</div>
         </div>
         <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-2xl p-5 text-white shadow-lg card-hover">
           <div className="text-xs font-medium text-white/70 mb-2">CSMs Qubits Pending</div>
-          <div className="text-4xl font-black">5</div>
+          <div className="text-4xl font-black">{Math.max(0, summary.length - COMPLETED_COUNT)}</div>
         </div>
       </div>
 

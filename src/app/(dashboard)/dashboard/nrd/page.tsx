@@ -10,15 +10,28 @@ import { NRTrendChart } from "@/components/panels/nrd/NRTrendChart";
 
 export default function NRDPage() {
   const [njId, setNjId] = useState<Id<"newJoiners"> | "all">("all");
+  const [gridSearch, setGridSearch] = useState("");
+
   const njs = useQuery(api.queries.newJoiners.list, {});
   const grid = useQuery(api.queries.nr.monthlyGrid);
   const stats = useQuery(api.queries.nr.nrdStats);
-  const firstNJ = njs?.[0]?._id;
-  const activeNJ = njId !== "all" ? njId : firstNJ;
+
+  // Default trend to first NJ that actually has NR data
+  const njsWithData = new Set(grid?.records.map(r => r.njId) ?? []);
+  const firstNJWithData = njs?.find((n: Doc<"newJoiners">) => njsWithData.has(n._id))?._id;
+  const activeNJ = njId !== "all" ? njId : firstNJWithData;
+
   const singleNR = useQuery(api.queries.nr.byNJ, activeNJ ? { njId: activeNJ } : "skip");
+
   const njNames = Object.fromEntries(njs?.map((n: Doc<"newJoiners">) => [n._id, n.name]) ?? []);
-  const njDesignations = Object.fromEntries(njs?.flatMap((n: Doc<"newJoiners">) => n.designation ? [[n._id, n.designation]] : []) ?? []);
+  const njJoinDates = Object.fromEntries(njs?.map((n: Doc<"newJoiners">) => [n._id, n.joinDate]) ?? []);
+  const njTenures = Object.fromEntries(njs?.map((n: Doc<"newJoiners">) => [n._id, n.tenureMonths]) ?? []);
   const njIds = njs?.map((n: Doc<"newJoiners">) => n._id) ?? [];
+
+  const selectedNJName =
+    njId === "all"
+      ? (njs?.find((n: Doc<"newJoiners">) => n._id === firstNJWithData)?.name ?? "—")
+      : (njs?.find((n: Doc<"newJoiners">) => n._id === njId)?.name ?? "—");
 
   const statCards = [
     {
@@ -73,9 +86,34 @@ export default function NRDPage() {
 
       {/* Monthly NR Grid */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">Monthly NR Grid — All CSMs</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-gray-700">Monthly NR Grid — All CSMs</h2>
+          <div className="relative">
+            <svg
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search name…"
+              value={gridSearch}
+              onChange={e => setGridSearch(e.target.value)}
+              className="text-xs pl-7 pr-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder-gray-400 w-40"
+            />
+          </div>
+        </div>
         {grid
-          ? <MonthlyNRGrid records={grid.records} months={grid.months} njIds={njIds} njNames={njNames} njDesignations={njDesignations} />
+          ? <MonthlyNRGrid
+              records={grid.records}
+              months={grid.months}
+              njIds={njIds}
+              njNames={njNames}
+              njJoinDates={njJoinDates}
+              njTenures={njTenures}
+              filter={gridSearch}
+            />
           : <div className="animate-pulse h-48 bg-gray-50 rounded-xl" />}
       </div>
 
@@ -83,7 +121,7 @@ export default function NRDPage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-gray-700">
-            NR Trend — {njId === "all" ? "First NJ" : njs?.find((n: Doc<"newJoiners">) => n._id === njId)?.name}
+            NR Trend — {selectedNJName}
           </h2>
           <NJFilter value={njId} onChange={setNjId} />
         </div>

@@ -7,6 +7,7 @@ import { Doc, Id } from "@/../convex/_generated/dataModel";
 const TODAY = new Date().toISOString().split("T")[0];
 import { HuddleLog } from "@/components/panels/overview/HuddleLog";
 import { DayTaskTracker, HuddleStatus } from "@/components/panels/overview/DayTaskTracker";
+import { NJDetailModal } from "@/components/panels/overview/NJDetailModal";
 import { ExportButton } from "@/components/shared/ExportButton";
 import {
   Users, Search, X,
@@ -74,6 +75,7 @@ function initials(name: string) {
 
 export default function OverviewPage() {
   const [selectedNJId, setSelectedNJId]     = useState<Id<"newJoiners"> | null>(null);
+  const [modalNJ, setModalNJ]               = useState<Doc<"newJoiners"> | null>(null);
   const [search, setSearch]                 = useState("");
   const [categoryFilter, setCategoryFilter] = useState<DisplayCategory | "All">("All");
 
@@ -225,9 +227,15 @@ export default function OverviewPage() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             {hasAlert && <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />}
-                            <span className={`font-medium ${nj.isActive ? "text-gray-900" : "text-gray-400"}`}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setModalNJ(nj);
+                              }}
+                              className={`font-medium text-left hover:text-indigo-600 hover:underline transition-colors ${nj.isActive ? "text-gray-900" : "text-gray-400"}`}
+                            >
                               {nj.name}
-                            </span>
+                            </button>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-gray-500 font-mono text-xs">{nj.empId ?? "—"}</td>
@@ -336,6 +344,14 @@ export default function OverviewPage() {
         </div>
 
       </div>
+
+      {/* NJ Detail Modal */}
+      {modalNJ && (
+        <NJDetailModal
+          nj={modalNJ}
+          onClose={() => setModalNJ(null)}
+        />
+      )}
     </div>
   );
 }
