@@ -1,7 +1,7 @@
 import { query } from "../_generated/server";
 import { v } from "convex/values";
 
-/** Per-CSM corporate summary. Corporate claim data not yet available — returns null for those fields. */
+/** Per-CSM corporate summary — sourced from rcbSummary (live Koenig API sync). */
 export const allCorpSummary = query({
   args: {},
   handler: async (ctx) => {
@@ -10,16 +10,25 @@ export const allCorpSummary = query({
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .collect();
 
+    const allSummaries = await ctx.db.query("rcbSummary").collect();
+
+    const summaryByNJ = new Map(allSummaries.map((s) => [s.njId as string, s]));
+
     return [...njs]
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map((nj) => ({
-        _id: nj._id,
-        name: nj.name,
-        designation: nj.designation,
-        tenureMonths: nj.tenureMonths,
-        claimedCorporates: null as null,
-        nrFromCorporates: null as null,
-      }));
+      .map((nj) => {
+        const s = summaryByNJ.get(nj._id as string);
+        return {
+          _id: nj._id,
+          empId: nj.empId ?? null,
+          name: nj.name,
+          designation: nj.designation,
+          tenureMonths: nj.tenureMonths,
+          joinDate: nj.joinDate,
+          claimedCorporates: s?.claimedCorporates ?? 0,
+          nrFromCorporates: s?.nrFromCorporates ?? 0,
+        };
+      });
   },
 });
 

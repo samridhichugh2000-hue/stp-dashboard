@@ -36,4 +36,11 @@ crons.daily(
   internal.actions.syncTeamsHuddles.syncTeamsHuddles
 );
 
+// Sync RCB from live API daily at 02:00 IST (20:30 UTC previous day)
+crons.daily(
+  "syncRCB",
+  { hourUTC: 20, minuteUTC: 30 },
+  internal.actions.syncRCBFromAPI.syncRCBFromAPI
+);
+
 export default crons;

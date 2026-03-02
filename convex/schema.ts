@@ -114,6 +114,15 @@ export default defineSchema({
     revenueLinked: v.number(),
   }).index("by_nj", ["njId"]),
 
+  // RCB summary per CSM — synced from live Koenig GetRCBData API
+  rcbSummary: defineTable({
+    njId: v.id("newJoiners"),
+    claimedCorporates: v.number(),
+    nrFromCorporates: v.number(),
+    noOfClients: v.optional(v.number()),
+    lastSyncAt: v.string(),
+  }).index("by_nj", ["njId"]),
+
   // Performance alerts (PA, PIP, EXIT)
   performanceAlerts: defineTable({
     njId: v.id("newJoiners"),
