@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, Fragment } from "react";
 import { useQuery, useAction, useConvexAuth } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Doc } from "@/../convex/_generated/dataModel";
+import { fmtTenure } from "@/lib/formatTenure";
 import {
   PieChart, Pie, Cell, Legend, ResponsiveContainer, Sector,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LabelList,
@@ -34,14 +35,6 @@ function toApiDate(iso: string): string {
 function fmtNumber(v: number): string {
   const sign = v < 0 ? "-" : "";
   return `${sign}${Math.abs(v).toLocaleString("en-IN")}`;
-}
-
-function fmtTenure(months: number): string {
-  if (months < 1) return "< 1 mo";
-  if (months < 12) return `${months} mo`;
-  const yr = Math.floor(months / 12);
-  const mo = months % 12;
-  return mo > 0 ? `${yr} yr ${mo} mo` : `${yr} yr`;
 }
 
 function fmtDOJ(iso: string): string {
@@ -244,9 +237,10 @@ export default function ROIPage() {
   const njs        = useQuery(api.queries.newJoiners.list, {});
   const defaultRows = useQuery(api.queries.roi.currentROISummary);
 
-  const [fromInput,   setFromInput]   = useState(thirtyDaysAgo);
-  const [toInput,     setToInput]     = useState(todayIso);
-  const [allRows,     setAllRows]     = useState<FlatRow[] | null>(null);
+  const [fromInput,     setFromInput]     = useState(thirtyDaysAgo);
+  const [toInput,       setToInput]       = useState(todayIso);
+  const [allRows,       setAllRows]       = useState<FlatRow[] | null>(null);
+  const [managerFilter, setManagerFilter] = useState("All");
 
   // Load cached rows after mount — avoids SSR/client mismatch
   useEffect(() => {
@@ -259,9 +253,13 @@ export default function ROIPage() {
   const [selectedCSM,  setSelectedCSM]  = useState<string | null>(null);
   const [activeIdx,    setActiveIdx]    = useState(0);
 
+  // ── Manager filter ────────────────────────────────────────────────────────
+  const managerList = [...new Set((njs ?? []).map((n: Doc<"newJoiners">) => n.managerId).filter(Boolean))].sort() as string[];
+  const visibleNjs = managerFilter === "All" ? (njs ?? []) : (njs ?? []).filter((n: Doc<"newJoiners">) => n.managerId === managerFilter);
+
   // ── NJ name sets ──────────────────────────────────────────────────────────
   const njNameSet = new Set<string>();
-  for (const n of (njs ?? [])) {
+  for (const n of visibleNjs) {
     const base = normName(n.name);
     njNameSet.add(base);
     const words = base.split(/\s+/).filter(Boolean);
@@ -269,7 +267,7 @@ export default function ROIPage() {
   }
 
   const njMeta = new Map(
-    (njs ?? []).map((n: Doc<"newJoiners">) => [
+    visibleNjs.map((n: Doc<"newJoiners">) => [
       normName(n.name),
       { joinDate: n.joinDate, tenureMonths: n.tenureMonths, designation: n.designation },
     ])
@@ -306,7 +304,7 @@ export default function ROIPage() {
   const matchedNormNames = new Set(
     (matchedRows ?? []).flatMap(r => normCCECandidates(r.cce))
   );
-  const zeroRows: FlatRow[] = (njs ?? [])
+  const zeroRows: FlatRow[] = visibleNjs
     .filter((n: Doc<"newJoiners">) => !matchedNormNames.has(normName(n.name)))
     .map((n: Doc<"newJoiners">) => ({ cce: n.name, leads: 0, registration: null, roi: 0 }));
 
@@ -461,7 +459,28 @@ export default function ROIPage() {
             <h2 className="text-sm font-semibold text-gray-700">CSM ROI Breakdown</h2>
             <p className="text-[11px] text-gray-400 mt-0.5">{fromInput} – {toInput}</p>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Manager filter */}
+            <div className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus-within:ring-2 focus-within:ring-indigo-300 transition-all">
+              <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              <select
+                value={managerFilter}
+                onChange={e => setManagerFilter(e.target.value)}
+                className="text-xs bg-transparent text-gray-600 focus:outline-none max-w-[140px] cursor-pointer"
+              >
+                <option value="All">All Managers</option>
+                {managerList.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              {managerFilter !== "All" && (
+                <button onClick={() => setManagerFilter("All")} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
             <div className="relative">
               <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -543,7 +562,7 @@ export default function ROIPage() {
                             {meta?.joinDate ? fmtDOJ(meta.joinDate) : <span className="text-gray-300">—</span>}
                           </td>
                           <td className="py-2.5 px-3 text-xs text-gray-500 whitespace-nowrap">
-                            {meta?.tenureMonths !== undefined ? fmtTenure(meta.tenureMonths) : <span className="text-gray-300">—</span>}
+                            {meta?.joinDate ? fmtTenure(meta.joinDate) : <span className="text-gray-300">—</span>}
                           </td>
                           <td className="py-2.5 px-3 text-right text-xs text-gray-500 tabular-nums">{row.leads}</td>
                           <td className="py-2.5 px-3 text-right text-xs text-gray-500 tabular-nums">

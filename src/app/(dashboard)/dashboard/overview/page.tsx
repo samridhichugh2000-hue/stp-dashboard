@@ -13,15 +13,16 @@ import {
   Users, Search, X,
   Building2, MapPin, Mail, Hash, UserCircle2, CalendarDays, ChevronRight,
 } from "lucide-react";
+import { fmtTenure } from "@/lib/formatTenure";
 
 // ── Display category ──────────────────────────────────────────────────────────
 
-type DisplayCategory = "Developed" | "Not Developed" | "New Joiner" | "Inactive";
+type DisplayCategory = "Developed" | "Not Developed" | "STP WIP" | "Inactive";
 
 function getDisplayCategory(nj: Doc<"newJoiners">): DisplayCategory {
   if (!nj.isActive) return "Inactive";
   const daysSinceJoining = (Date.now() - new Date(nj.joinDate).getTime()) / 86_400_000;
-  if (daysSinceJoining < 30) return "New Joiner";
+  if (daysSinceJoining < 30) return "STP WIP";
   if (nj.category === "Developed") return "Developed";
   return "Not Developed";
 }
@@ -29,12 +30,12 @@ function getDisplayCategory(nj: Doc<"newJoiners">): DisplayCategory {
 const CATEGORY_STYLE: Record<DisplayCategory, string> = {
   "Developed":     "bg-emerald-100 text-emerald-700",
   "Not Developed": "bg-red-100 text-red-600",
-  "New Joiner":    "bg-violet-100 text-violet-700",
+  "STP WIP":       "bg-violet-100 text-violet-700",
   "Inactive":      "bg-gray-100 text-gray-400",
 };
 
 const FILTER_OPTIONS: Array<DisplayCategory | "All"> = [
-  "All", "New Joiner", "Developed", "Not Developed", "Inactive",
+  "All", "STP WIP", "Developed", "Not Developed", "Inactive",
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -60,13 +61,6 @@ function fmtDOJ(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function fmtTenure(m: number) {
-  if (m < 1) return "< 1 mo";
-  if (m < 12) return `${m} mo`;
-  const yr = Math.floor(m / 12), mo = m % 12;
-  return mo > 0 ? `${yr}y ${mo}mo` : `${yr}y`;
-}
-
 function initials(name: string) {
   return name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 }
@@ -78,6 +72,7 @@ export default function OverviewPage() {
   const [modalNJ, setModalNJ]               = useState<Doc<"newJoiners"> | null>(null);
   const [search, setSearch]                 = useState("");
   const [categoryFilter, setCategoryFilter] = useState<DisplayCategory | "All">("All");
+  const [managerFilter, setManagerFilter]   = useState<string>("All");
 
   const njs        = useQuery(api.queries.newJoiners.list, { includeInactive: true });
   const alerts     = useQuery(api.queries.performance.pendingAlerts);
@@ -103,6 +98,11 @@ export default function OverviewPage() {
 
   const activeCount = allNJs.filter((n: Doc<"newJoiners">) => n.isActive).length;
 
+  // Unique manager list sorted alphabetically (exclude blanks)
+  const managerList = [...new Set(
+    allNJs.map((n: Doc<"newJoiners">) => n.managerId).filter(Boolean)
+  )].sort() as string[];
+
   const q = search.trim().toLowerCase();
   const filteredNJs = allNJs.filter((n: Doc<"newJoiners">) => {
     const matchesSearch =
@@ -112,7 +112,9 @@ export default function OverviewPage() {
       (n.managerId ?? "").toLowerCase().includes(q);
     const matchesCategory =
       categoryFilter === "All" || getDisplayCategory(n) === categoryFilter;
-    return matchesSearch && matchesCategory;
+    const matchesManager =
+      managerFilter === "All" || n.managerId === managerFilter;
+    return matchesSearch && matchesCategory && matchesManager;
   });
 
   const selectedNJ = selectedNJId
@@ -168,21 +170,43 @@ export default function OverviewPage() {
               )}
             </div>
 
-            {/* Category filter pills */}
-            <div className="flex flex-wrap gap-1.5">
-              {FILTER_OPTIONS.map((opt) => (
-                <button
-                  key={opt}
-                  onClick={() => setCategoryFilter(opt)}
-                  className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all border ${
-                    categoryFilter === opt
-                      ? "bg-indigo-600 text-white border-indigo-600"
-                      : "bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600"
-                  }`}
+            {/* Category filter pills + Manager dropdown */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap gap-1.5 flex-1">
+                {FILTER_OPTIONS.map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => setCategoryFilter(opt)}
+                    className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all border ${
+                      categoryFilter === opt
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600"
+                    }`}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+
+              {/* Manager filter dropdown */}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <UserCircle2 size={13} className="text-gray-400" />
+                <select
+                  value={managerFilter}
+                  onChange={(e) => setManagerFilter(e.target.value)}
+                  className="text-[11px] font-medium border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all max-w-[180px] truncate"
                 >
-                  {opt}
-                </button>
-              ))}
+                  <option value="All">All Managers</option>
+                  {managerList.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+                {managerFilter !== "All" && (
+                  <button onClick={() => setManagerFilter("All")} className="text-gray-400 hover:text-gray-600">
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -244,7 +268,7 @@ export default function OverviewPage() {
                             {displayCat}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtTenure(nj.tenureMonths)}</td>
+                        <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtTenure(nj.joinDate)}</td>
                         <td className="px-4 py-3 text-gray-500 max-w-[130px] truncate">{nj.managerId || "—"}</td>
                         <td className="px-4 py-3 text-gray-500 whitespace-nowrap">{fmtDOJ(nj.joinDate)}</td>
                         <td className="px-4 py-3">
@@ -256,7 +280,7 @@ export default function OverviewPage() {
                   {filteredNJs.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-4 py-14 text-center text-gray-400 text-sm">
-                        No records found{search ? ` for "${search}"` : categoryFilter !== "All" ? ` in "${categoryFilter}"` : ""}
+                        No records found{search ? ` for "${search}"` : managerFilter !== "All" ? ` under "${managerFilter}"` : categoryFilter !== "All" ? ` in "${categoryFilter}"` : ""}
                       </td>
                     </tr>
                   )}
@@ -283,7 +307,7 @@ export default function OverviewPage() {
                       <p className="text-white/70 text-xs mt-0.5">{selectedNJ.designation}</p>
                     )}
                     <p className="text-white/50 text-xs mt-1">
-                      Joined {fmtDOJ(selectedNJ.joinDate)} · {fmtTenure(selectedNJ.tenureMonths)}
+                      Joined {fmtDOJ(selectedNJ.joinDate)} · {fmtTenure(selectedNJ.joinDate)}
                     </p>
                   </div>
                 </div>

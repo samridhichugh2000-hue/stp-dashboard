@@ -26,8 +26,10 @@ export const monthlyGrid = query({
   args: {},
   handler: async (ctx) => {
     const all = await ctx.db.query("nrRecords").collect();
-    // Newest month first (Feb 2026, Jan 2026, Dec 2025 …)
-    const months = [...new Set(all.map((r) => `${r.year}-${String(r.month).padStart(2, "0")}`))]
+    const today = new Date();
+    const currentKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    // Current month always first, then newest → oldest
+    const months = [...new Set([currentKey, ...all.map((r) => `${r.year}-${String(r.month).padStart(2, "0")}`)])]
       .sort()
       .reverse();
 

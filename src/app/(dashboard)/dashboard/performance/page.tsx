@@ -8,6 +8,7 @@ import {
   PieChart, Pie, Cell, Legend, ResponsiveContainer, Sector,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
+import { fmtTenure } from "@/lib/formatTenure";
 
 type NRROIStatus = "Positive" | "Negative" | null;
 
@@ -19,14 +20,6 @@ const P_BLACK = { bg: "bg-gray-100",   text: "text-gray-700",   ring: "ring-gray
 // Hex fills for charts
 const C_GREEN = "#86efac";   // green-300
 const C_RED   = "#fca5a5";   // red-300
-
-function fmtTenure(months: number): string {
-  if (months < 1) return "< 1 mo";
-  if (months < 12) return `${months} mo`;
-  const yr = Math.floor(months / 12);
-  const mo = months % 12;
-  return mo > 0 ? `${yr} yr ${mo} mo` : `${yr} yr`;
-}
 
 /**
  * Developed = ROI positive AND (NR currently positive OR positive within first 4 months).
@@ -69,12 +62,12 @@ function NRStatusBadge({ status, positiveMonth }: { status: NRROIStatus; positiv
   return <Pill label={status} palette={status === "Positive" ? P_GREEN : P_RED} />;
 }
 
-function StatusBadge({ dev, tenure }: { dev: boolean | null; tenure: number }) {
+function StatusBadge({ dev, joinDate }: { dev: boolean | null; joinDate: string }) {
   if (dev === null) return <span className="text-gray-300 text-xs select-none">—</span>;
   return (
     <div className="inline-flex flex-col items-center gap-0.5">
       <Pill label={dev ? "Developed" : "Not Developed"} palette={dev ? P_GREEN : P_RED} />
-      <span className="text-[10px] text-gray-400">within {fmtTenure(tenure)}</span>
+      <span className="text-[10px] text-gray-400">within {fmtTenure(joinDate)}</span>
     </div>
   );
 }
@@ -112,7 +105,12 @@ const renderActiveShape = (props: Record<string, number & string>) => {
 export default function PerformancePage() {
   const [activeIdx, setActiveIdx] = useState(0);
   const [search, setSearch] = useState("");
+  const [managerFilter, setManagerFilter] = useState("All");
   const rows = useQuery(api.queries.performance.njPerformanceStatus);
+  const njs  = useQuery(api.queries.newJoiners.list, {});
+
+  const managerList = [...new Set((njs ?? []).map(n => n.managerId).filter(Boolean))].sort() as string[];
+  const njManagerMap = new Map((njs ?? []).map(n => [n._id as string, n.managerId]));
 
   const enriched = rows?.map(row => {
     const dev = computeDev(row.nrPositiveMonth, row.roiStatus, row.nrStatus);
@@ -124,7 +122,11 @@ export default function PerformancePage() {
   });
 
   const q = search.trim().toLowerCase();
-  const filtered = q ? enriched?.filter(r => r.name.toLowerCase().includes(q)) : enriched;
+  const filtered = enriched?.filter(r => {
+    const matchesSearch = !q || r.name.toLowerCase().includes(q);
+    const matchesManager = managerFilter === "All" || njManagerMap.get(r._id as string) === managerFilter;
+    return matchesSearch && matchesManager;
+  });
 
   const devCount    = enriched?.filter(r => r.dev === true).length  ?? 0;
   const notDevCount = enriched?.filter(r => r.dev === false).length ?? 0;
@@ -180,25 +182,48 @@ export default function PerformancePage() {
 
       {/* Table */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        {/* Search */}
-        <div className="relative mb-4">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search CSM by name…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white placeholder-gray-400 transition-colors"
-          />
-          {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
+        {/* Search + Manager filter */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="relative flex-1 min-w-[200px]">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search CSM by name…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white placeholder-gray-400 transition-colors"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {/* Manager filter */}
+          <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus-within:ring-2 focus-within:ring-indigo-300 transition-all">
+            <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <select
+              value={managerFilter}
+              onChange={e => setManagerFilter(e.target.value)}
+              className="text-sm bg-transparent text-gray-600 focus:outline-none cursor-pointer"
+            >
+              <option value="All">All Managers</option>
+              {managerList.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            {managerFilter !== "All" && (
+              <button onClick={() => setManagerFilter("All")} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
         <h2 className="text-sm font-semibold text-gray-700 mb-4">CSM Performance Breakdown</h2>
         {rows ? (
@@ -223,10 +248,10 @@ export default function PerformancePage() {
                       <p className="text-xs font-semibold text-gray-800 group-hover:text-gray-900">{row.name}</p>
                       {row.designation && <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>}
                     </td>
-                    <td className="py-2.5 px-3 text-xs text-gray-400">{fmtTenure(row.tenureMonths)}</td>
+                    <td className="py-2.5 px-3 text-xs text-gray-400">{fmtTenure(row.joinDate)}</td>
                     <td className="py-2.5 px-3 text-center"><NRStatusBadge status={row.nrStatus} positiveMonth={row.nrPositiveMonth} /></td>
                     <td className="py-2.5 px-3 text-center"><NRROIBadge status={row.roiStatus} /></td>
-                    <td className="py-2.5 px-3 text-center"><StatusBadge dev={row.dev} tenure={row.tenureMonths} /></td>
+                    <td className="py-2.5 px-3 text-center"><StatusBadge dev={row.dev} joinDate={row.joinDate} /></td>
                     <td className="py-2.5 px-3 text-center"><ActionBadge action={row.suggestedAction} /></td>
                   </tr>
                 ))}

@@ -5,6 +5,7 @@ import { api } from "@/../convex/_generated/api";
 import { Doc } from "@/../convex/_generated/dataModel";
 import { X, Hash, UserCircle2, MapPin, CalendarDays, Mail } from "lucide-react";
 import { clsx } from "clsx";
+import { fmtTenure } from "@/lib/formatTenure";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -13,12 +14,6 @@ function initials(name: string) {
 }
 function fmtDOJ(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-}
-function fmtTenure(m: number) {
-  if (m < 1) return "< 1 mo";
-  if (m < 12) return `${m} mo`;
-  const yr = Math.floor(m / 12), mo = m % 12;
-  return mo > 0 ? `${yr}y ${mo}mo` : `${yr}y`;
 }
 function fmtINR(n: number): string {
   const sign = n < 0 ? "-" : "";
@@ -31,12 +26,12 @@ function fmtINR(n: number): string {
 
 // ── Category ──────────────────────────────────────────────────────────────────
 
-type DisplayCategory = "Developed" | "Not Developed" | "New Joiner" | "Inactive";
+type DisplayCategory = "Developed" | "Not Developed" | "STP WIP" | "Inactive";
 
 function getDisplayCategory(nj: Doc<"newJoiners">): DisplayCategory {
   if (!nj.isActive) return "Inactive";
   const daysSince = (Date.now() - new Date(nj.joinDate).getTime()) / 86_400_000;
-  if (daysSince < 30) return "New Joiner";
+  if (daysSince < 30) return "STP WIP";
   if (nj.category === "Developed") return "Developed";
   return "Not Developed";
 }
@@ -45,7 +40,7 @@ function StatusPill({ cat }: { cat: DisplayCategory }) {
   const cls: Record<DisplayCategory, string> = {
     "Developed":     "bg-emerald-100 text-emerald-700",
     "Not Developed": "bg-red-100 text-red-600",
-    "New Joiner":    "bg-violet-100 text-violet-700",
+    "STP WIP":       "bg-violet-100 text-violet-700",
     "Inactive":      "bg-gray-100 text-gray-500",
   };
   return (
@@ -107,7 +102,7 @@ export function NJDetailModal({ nj, onClose }: Props) {
               <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1.5 text-[11px] text-white/60">
                 {nj.empId && <span className="flex items-center gap-1"><Hash size={10} />{nj.empId}</span>}
                 <span className="flex items-center gap-1"><CalendarDays size={10} />Joined {fmtDOJ(nj.joinDate)}</span>
-                <span>{fmtTenure(nj.tenureMonths)}</span>
+                <span>{fmtTenure(nj.joinDate)}</span>
               </div>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/20 transition-colors text-white/70 hover:text-white flex-shrink-0">

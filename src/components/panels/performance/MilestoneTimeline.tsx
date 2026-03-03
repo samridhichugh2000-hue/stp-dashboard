@@ -3,6 +3,7 @@
 import { clsx } from "clsx";
 import { Doc } from "@/../convex/_generated/dataModel";
 import { CheckCircle2, Circle, AlertCircle } from "lucide-react";
+import { fmtTenure } from "@/lib/formatTenure";
 
 interface NJ {
   _id: string;
@@ -35,7 +36,7 @@ export function MilestoneTimeline({
       <div className="flex items-center justify-between mb-4">
         <div>
           <span className="text-sm font-semibold text-gray-800">{nj.name}</span>
-          <span className="text-xs text-gray-400 ml-2">{nj.tenureMonths} months tenure</span>
+          <span className="text-xs text-gray-400 ml-2">{fmtTenure(nj.joinDate)} tenure</span>
         </div>
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
           {nj.currentPhase}

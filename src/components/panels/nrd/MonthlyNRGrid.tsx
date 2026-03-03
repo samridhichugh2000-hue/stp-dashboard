@@ -1,5 +1,8 @@
 "use client";
+import { Fragment, useRef, useEffect } from "react";
 import { clsx } from "clsx";
+import { fmtTenure } from "@/lib/formatTenure";
+import { NRInlineTrend } from "@/components/panels/nrd/NRInlineTrend";
 interface NRRecord { _id:string; njId:string; month:number; year:number; nrValue:number; isPositive:boolean; }
 interface MonthlyNRGridProps {
   records: NRRecord[];
@@ -9,6 +12,8 @@ interface MonthlyNRGridProps {
   njJoinDates?: Record<string,string>;  // "YYYY-MM-DD"
   njTenures?: Record<string,number>;    // months
   filter?: string;
+  selectedNjId?: string;
+  onSelect?: (njId: string) => void;
 }
 
 /** Exact number with Indian comma grouping: 437096 → 4,37,096 */
@@ -33,15 +38,35 @@ function isBeforeJoin(joinDateISO: string | undefined, colYear: number, colMonth
   return colYear < jYear || (colYear === jYear && colMonth < jMonth);
 }
 
-function formatTenure(months: number): string {
-  if (months < 1) return "< 1 mo";
-  if (months < 12) return `${months} mo`;
-  const yrs = Math.floor(months / 12);
-  const mo = months % 12;
-  return mo > 0 ? `${yrs}y ${mo}mo` : `${yrs}y`;
-}
 
-export function MonthlyNRGrid({ records, months, njIds, njNames, njJoinDates, njTenures, filter }: MonthlyNRGridProps) {
+export function MonthlyNRGrid({ records, months, njIds, njNames, njJoinDates, njTenures, filter, selectedNjId, onSelect }: MonthlyNRGridProps) {
+  const topBarRef   = useRef<HTMLDivElement>(null);
+  const tableWrapRef = useRef<HTMLDivElement>(null);
+  const mirrorRef   = useRef<HTMLDivElement>(null);
+  const scrollLock  = useRef(false);
+
+  // Keep the mirror div width equal to the table's scroll width so the top scrollbar matches.
+  useEffect(() => {
+    const wrap = tableWrapRef.current;
+    if (!wrap) return;
+    const sync = () => { if (mirrorRef.current) mirrorRef.current.style.width = `${wrap.scrollWidth}px`; };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  });
+
+  const onTopScroll = () => {
+    if (scrollLock.current) { scrollLock.current = false; return; }
+    scrollLock.current = true;
+    if (tableWrapRef.current && topBarRef.current) tableWrapRef.current.scrollLeft = topBarRef.current.scrollLeft;
+  };
+  const onBottomScroll = () => {
+    if (scrollLock.current) { scrollLock.current = false; return; }
+    scrollLock.current = true;
+    if (topBarRef.current && tableWrapRef.current) topBarRef.current.scrollLeft = tableWrapRef.current.scrollLeft;
+  };
+
   const njsWithData = new Set(records.map(r => r.njId));
 
   const visibleIds = njIds
@@ -65,7 +90,12 @@ export function MonthlyNRGrid({ records, months, njIds, njNames, njJoinDates, nj
           {withDataCount} of {visibleIds.length} shown have NR data
         </p>
       )}
-      <div className="overflow-x-auto">
+      {/* Top scrollbar mirror — stays in sync with the table below */}
+      <div ref={topBarRef} className="overflow-x-auto" onScroll={onTopScroll}>
+        <div ref={mirrorRef} style={{ height: 1 }} />
+      </div>
+
+      <div ref={tableWrapRef} className="overflow-x-auto" onScroll={onBottomScroll}>
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr className="border-b-2 border-gray-100 bg-gray-50/60">
@@ -87,47 +117,75 @@ export function MonthlyNRGrid({ records, months, njIds, njNames, njJoinDates, nj
                 </td>
               </tr>
             )}
-            {visibleIds.map(njId => (
-              <tr key={njId} className={clsx("hover:bg-indigo-50/30 transition-colors group", !njsWithData.has(njId) && "opacity-40")}>
-                <td className="py-2.5 px-3 sticky left-0 bg-white group-hover:bg-indigo-50/30 z-10 transition-colors whitespace-nowrap">
-                  <p className="font-semibold text-gray-700">{njNames[njId] ?? njId}</p>
-                  {njTenures?.[njId] !== undefined && (
-                    <p className="text-[10px] text-gray-400 mt-0.5">{formatTenure(njTenures[njId])}</p>
-                  )}
-                </td>
-                {months.map(m => {
-                  const [yr, mo] = m.split("-").map(Number);
+            {visibleIds.map(njId => {
+              const isSelected = selectedNjId === njId;
+              return (
+              <Fragment key={njId}>
+                <tr className={clsx(
+                  "transition-colors group",
+                  isSelected ? "bg-indigo-50" : "hover:bg-indigo-50/30",
+                  !njsWithData.has(njId) && "opacity-40"
+                )}>
+                  <td className={clsx(
+                    "py-2.5 px-3 sticky left-0 z-10 transition-colors whitespace-nowrap",
+                    isSelected ? "bg-indigo-50" : "bg-white group-hover:bg-indigo-50/30"
+                  )}>
+                    <button
+                      onClick={() => onSelect?.(isSelected ? "" : njId)}
+                      className="text-left w-full cursor-pointer"
+                    >
+                      <p className={clsx(
+                        "font-semibold",
+                        isSelected ? "text-indigo-700" : "text-gray-700 hover:text-indigo-600"
+                      )}>
+                        {njNames[njId] ?? njId}
+                        {isSelected && <span className="ml-1.5 text-[9px] font-bold text-indigo-400 uppercase tracking-wider">▲</span>}
+                      </p>
+                      {njJoinDates?.[njId] && (
+                        <p className="text-[10px] text-gray-400 mt-0.5">{fmtTenure(njJoinDates[njId])}</p>
+                      )}
+                    </button>
+                  </td>
+                  {months.map(m => {
+                    const [yr, mo] = m.split("-").map(Number);
 
-                  // Blank out months before the NJ joined
-                  if (isBeforeJoin(njJoinDates?.[njId], yr, mo)) {
-                    return (
-                      <td key={m} className="py-2.5 px-2 bg-gray-50/40" />
-                    );
-                  }
+                    if (isBeforeJoin(njJoinDates?.[njId], yr, mo)) {
+                      return <td key={m} className="py-2.5 px-2 bg-gray-50/40" />;
+                    }
 
-                  const rec = records.find(r => r.njId === njId && r.year === yr && r.month === mo);
-                  if (!rec) {
+                    const rec = records.find(r => r.njId === njId && r.year === yr && r.month === mo);
+                    if (!rec) {
+                      return (
+                        <td key={m} className="py-2.5 px-2 text-center">
+                          <span className="text-gray-200 text-xs select-none">—</span>
+                        </td>
+                      );
+                    }
                     return (
                       <td key={m} className="py-2.5 px-2 text-center">
-                        <span className="text-gray-200 text-xs select-none">—</span>
+                        <span className={clsx(
+                          "inline-block text-xs font-semibold px-2 py-1 rounded-lg whitespace-nowrap",
+                          rec.isPositive
+                            ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/60"
+                            : "bg-red-100 text-red-700 ring-1 ring-red-200/60"
+                        )}>
+                          {formatINR(rec.nrValue)}
+                        </span>
                       </td>
                     );
-                  }
-                  return (
-                    <td key={m} className="py-2.5 px-2 text-center">
-                      <span className={clsx(
-                        "inline-block text-xs font-semibold px-2 py-1 rounded-lg whitespace-nowrap",
-                        rec.isPositive
-                          ? "bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/60"
-                          : "bg-red-100 text-red-700 ring-1 ring-red-200/60"
-                      )}>
-                        {formatINR(rec.nrValue)}
-                      </span>
+                  })}
+                </tr>
+
+                {isSelected && (
+                  <tr>
+                    <td colSpan={months.length + 1} className="px-4 pb-4 pt-2 bg-indigo-50/60">
+                      <NRInlineTrend njId={njId} njName={njNames[njId] ?? njId} />
                     </td>
-                  );
-                })}
-              </tr>
-            ))}
+                  </tr>
+                )}
+              </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

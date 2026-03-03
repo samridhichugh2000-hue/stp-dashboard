@@ -4,6 +4,7 @@ import { clsx } from "clsx";
 import { AlertBadge } from "@/components/shared/AlertBadge";
 import { format } from "date-fns";
 import { ChevronRight } from "lucide-react";
+import { fmtTenure } from "@/lib/formatTenure";
 
 interface NJCardProps {
   nj: {
@@ -111,7 +112,7 @@ export function NJCard({ nj, alerts = [], onClick, selected }: NJCardProps) {
             >
               {nj.category}
             </span>
-            <span className="text-[10px] text-gray-400">{nj.tenureMonths}mo</span>
+            <span className="text-[10px] text-gray-400">{fmtTenure(nj.joinDate)}</span>
           </div>
         </div>
 

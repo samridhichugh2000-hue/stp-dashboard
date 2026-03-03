@@ -5,6 +5,7 @@ import { useAction, useQuery, useConvexAuth } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Doc } from "@/../convex/_generated/dataModel";
 import { clsx } from "clsx";
+import { fmtTenure } from "@/lib/formatTenure";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LabelList, Cell,
@@ -66,14 +67,6 @@ function normCCECandidates(cce: string): string[] {
 function fmtDOJ(iso: string): string {
   const d = new Date(iso + "T00:00:00");
   return `${String(d.getDate()).padStart(2, "0")} ${MONTHS_ABBR[d.getMonth()]} ${d.getFullYear()}`;
-}
-
-function fmtTenure(months: number): string {
-  if (months < 1) return "< 1 mo";
-  if (months < 12) return `${months} mo`;
-  const yr = Math.floor(months / 12);
-  const mo = months % 12;
-  return mo > 0 ? `${yr} yr ${mo} mo` : `${yr} yr`;
 }
 
 function fmtINR(v: number): string {
@@ -506,8 +499,8 @@ export default function LeadsPage() {
                             : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="py-2.5 px-3 text-xs text-gray-500 whitespace-nowrap">
-                          {getRowMeta(row.cce)?.tenureMonths !== undefined
-                            ? fmtTenure(getRowMeta(row.cce)!.tenureMonths)
+                          {getRowMeta(row.cce)?.joinDate
+                            ? fmtTenure(getRowMeta(row.cce)!.joinDate)
                             : <span className="text-gray-300">—</span>}
                         </td>
                         <td className="py-2.5 px-3 text-right text-xs font-semibold text-indigo-600 tabular-nums">

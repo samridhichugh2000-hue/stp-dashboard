@@ -10,6 +10,7 @@ import {
   BarChart3,
   Building2,
   Award,
+  Target,
   ChevronLeft,
   ChevronRight,
   Zap,
@@ -69,6 +70,13 @@ const navItems: NavItem[] = [
     icon: <Award size={17} />,
     roles: ["admin", "manager"],
     color: "from-rose-400 to-rose-600",
+  },
+  {
+    label: "Target Vs Achievement",
+    href: "/dashboard/target",
+    icon: <Target size={17} />,
+    roles: ["admin", "manager", "viewer"],
+    color: "from-cyan-400 to-blue-600",
   },
 ];
 

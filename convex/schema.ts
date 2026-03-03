@@ -28,6 +28,9 @@ export default defineSchema({
     tenureMonths: v.number(),
     isActive: v.boolean(),
     teamId: v.optional(v.string()),
+    // Legacy fields written directly onto NJ documents by older RCB sync — now stored in rcbSummary
+    claimedCorporates: v.optional(v.number()),
+    nrFromCorporates: v.optional(v.number()),
   })
     .index("by_manager", ["managerId"])
     .index("by_active", ["isActive"])

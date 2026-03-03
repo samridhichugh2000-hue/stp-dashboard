@@ -6,6 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
 } from "recharts";
+import { fmtTenure } from "@/lib/formatTenure";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -21,14 +22,6 @@ function fmtAxisINR(v: number): string {
   if (abs >= 100_000)    return `${sign}${(abs / 100_000).toFixed(1)}L`;
   if (abs >= 1_000)      return `${sign}${(abs / 1_000).toFixed(0)}K`;
   return `${sign}${abs}`;
-}
-
-function fmtTenure(months: number): string {
-  if (months < 1) return "< 1 mo";
-  if (months < 12) return `${months} mo`;
-  const yr = Math.floor(months / 12);
-  const mo = months % 12;
-  return mo > 0 ? `${yr} yr ${mo} mo` : `${yr} yr`;
 }
 
 function todayISO(): string {
@@ -78,10 +71,12 @@ type RCBRow = {
 
 export default function RCBPage() {
   const rows = useQuery(api.queries.rcb.allCorpSummary) as RCBRow[] | undefined;
+  const njs  = useQuery(api.queries.newJoiners.list, {});
   const fetchRCBForRange = useAction(api.actions.syncRCBFromAPI.getRCBForRange);
 
   // ── Filters ────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
+  const [managerFilter, setManagerFilter] = useState("All");
   const [startDate, setStartDate] = useState(yearAgoISO);
   const [endDate, setEndDate] = useState(todayISO);
 
@@ -93,6 +88,9 @@ export default function RCBPage() {
 
   if (!rows) return <div className="animate-pulse h-96 bg-white/60 rounded-2xl" />;
 
+  const managerList = [...new Set((njs ?? []).map(n => n.managerId).filter(Boolean))].sort() as string[];
+  const njManagerMap = new Map((njs ?? []).map(n => [n._id as string, n.managerId]));
+
   // ── Merge custom data if a date-range fetch is active ─────────────────────
   const displayRows: RCBRow[] = rows.map((row) => {
     if (!customMap || !row.empId) return row;
@@ -102,7 +100,9 @@ export default function RCBPage() {
   });
 
   // ── Sort: recent joiners first (shortest tenure first) ────────────────────
-  const sorted = [...displayRows].sort((a, b) => a.tenureMonths - b.tenureMonths);
+  const sorted = [...displayRows]
+    .filter(r => managerFilter === "All" || njManagerMap.get(r._id as string) === managerFilter)
+    .sort((a, b) => a.tenureMonths - b.tenureMonths);
 
   // ── Search filter ──────────────────────────────────────────────────────────
   const q = search.trim().toLowerCase();
@@ -181,28 +181,51 @@ export default function RCBPage() {
       {/* Table card */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
 
-        {/* Search bar — full width, standalone */}
-        <div className="relative mb-3">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search CSM by name…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white placeholder-gray-400 transition-colors"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        {/* Search + Manager filter */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search CSM by name…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white placeholder-gray-400 transition-colors"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {/* Manager filter */}
+          <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus-within:ring-2 focus-within:ring-indigo-300 transition-all">
+            <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            <select
+              value={managerFilter}
+              onChange={e => setManagerFilter(e.target.value)}
+              className="text-sm bg-transparent text-gray-600 focus:outline-none cursor-pointer"
             >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
+              <option value="All">All Managers</option>
+              {managerList.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            {managerFilter !== "All" && (
+              <button onClick={() => setManagerFilter("All")} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Date range toolbar */}
@@ -302,7 +325,7 @@ export default function RCBPage() {
                         <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>
                       )}
                     </td>
-                    <td className="py-2.5 px-3 text-xs text-gray-500">{fmtTenure(row.tenureMonths)}</td>
+                    <td className="py-2.5 px-3 text-xs text-gray-500">{fmtTenure(row.joinDate)}</td>
                     <td className="py-2.5 px-3 text-right">
                       {row.claimedCorporates > 0 ? (
                         <span className="text-xs font-bold text-gray-800 tabular-nums">

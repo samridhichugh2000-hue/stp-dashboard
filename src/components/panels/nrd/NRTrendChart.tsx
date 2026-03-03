@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Res
 interface NRRecord { month:number; year:number; nrValue:number; isPositive:boolean; }
 interface NRTrendChartProps { records: NRRecord[]; }
 export function NRTrendChart({ records }: NRTrendChartProps) {
-  const data = [...records].sort((a,b)=>a.year!==b.year?a.year-b.year:a.month-b.month).map(r=>({
+  const data = [...records].sort((a,b)=>a.year!==b.year?b.year-a.year:b.month-a.month).map(r=>({
     label: new Date(r.year,r.month-1).toLocaleDateString("en-IN",{month:"short"}),
     value: r.nrValue,
     positive: r.isPositive,

@@ -2,36 +2,26 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
-import { Doc, Id } from "@/../convex/_generated/dataModel";
-import { NJFilter } from "@/components/shared/NJFilter";
+import { Doc } from "@/../convex/_generated/dataModel";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { MonthlyNRGrid } from "@/components/panels/nrd/MonthlyNRGrid";
-import { NRTrendChart } from "@/components/panels/nrd/NRTrendChart";
 
 export default function NRDPage() {
-  const [njId, setNjId] = useState<Id<"newJoiners"> | "all">("all");
+  const [selectedNjId, setSelectedNjId] = useState<string>("");
   const [gridSearch, setGridSearch] = useState("");
+  const [managerFilter, setManagerFilter] = useState("All");
 
   const njs = useQuery(api.queries.newJoiners.list, {});
   const grid = useQuery(api.queries.nr.monthlyGrid);
   const stats = useQuery(api.queries.nr.nrdStats);
 
-  // Default trend to first NJ that actually has NR data
-  const njsWithData = new Set(grid?.records.map(r => r.njId) ?? []);
-  const firstNJWithData = njs?.find((n: Doc<"newJoiners">) => njsWithData.has(n._id))?._id;
-  const activeNJ = njId !== "all" ? njId : firstNJWithData;
+  const managerList = [...new Set((njs ?? []).map((n: Doc<"newJoiners">) => n.managerId).filter(Boolean))].sort() as string[];
+  const filteredNjs = managerFilter === "All" ? (njs ?? []) : (njs ?? []).filter((n: Doc<"newJoiners">) => n.managerId === managerFilter);
 
-  const singleNR = useQuery(api.queries.nr.byNJ, activeNJ ? { njId: activeNJ } : "skip");
-
-  const njNames = Object.fromEntries(njs?.map((n: Doc<"newJoiners">) => [n._id, n.name]) ?? []);
-  const njJoinDates = Object.fromEntries(njs?.map((n: Doc<"newJoiners">) => [n._id, n.joinDate]) ?? []);
-  const njTenures = Object.fromEntries(njs?.map((n: Doc<"newJoiners">) => [n._id, n.tenureMonths]) ?? []);
-  const njIds = njs?.map((n: Doc<"newJoiners">) => n._id) ?? [];
-
-  const selectedNJName =
-    njId === "all"
-      ? (njs?.find((n: Doc<"newJoiners">) => n._id === firstNJWithData)?.name ?? "—")
-      : (njs?.find((n: Doc<"newJoiners">) => n._id === njId)?.name ?? "—");
+  const njNames = Object.fromEntries((njs ?? []).map((n: Doc<"newJoiners">) => [n._id, n.name]));
+  const njJoinDates = Object.fromEntries((njs ?? []).map((n: Doc<"newJoiners">) => [n._id, n.joinDate]));
+  const njTenures = Object.fromEntries((njs ?? []).map((n: Doc<"newJoiners">) => [n._id, n.tenureMonths]));
+  const njIds = filteredNjs.map((n: Doc<"newJoiners">) => n._id);
 
   const statCards = [
     {
@@ -88,20 +78,44 @@ export default function NRDPage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-gray-700">Monthly NR Grid — All CSMs</h2>
-          <div className="relative">
-            <svg
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
-              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search name…"
-              value={gridSearch}
-              onChange={e => setGridSearch(e.target.value)}
-              className="text-xs pl-7 pr-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder-gray-400 w-40"
-            />
+          <div className="flex items-center gap-2">
+            {/* Manager filter */}
+            <div className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-2.5 py-1.5 bg-white focus-within:ring-2 focus-within:ring-indigo-300 transition-all">
+              <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              <select
+                value={managerFilter}
+                onChange={e => setManagerFilter(e.target.value)}
+                className="text-xs bg-transparent text-gray-600 focus:outline-none max-w-[140px] cursor-pointer"
+              >
+                <option value="All">All Managers</option>
+                {managerList.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              {managerFilter !== "All" && (
+                <button onClick={() => setManagerFilter("All")} className="text-gray-400 hover:text-gray-600">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            {/* Name search */}
+            <div className="relative">
+              <svg
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search name…"
+                value={gridSearch}
+                onChange={e => setGridSearch(e.target.value)}
+                className="text-xs pl-7 pr-3 py-1.5 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white placeholder-gray-400 w-40"
+              />
+            </div>
           </div>
         </div>
         {grid
@@ -113,22 +127,12 @@ export default function NRDPage() {
               njJoinDates={njJoinDates}
               njTenures={njTenures}
               filter={gridSearch}
+              selectedNjId={selectedNjId}
+              onSelect={(id) => setSelectedNjId(id)}
             />
           : <div className="animate-pulse h-48 bg-gray-50 rounded-xl" />}
       </div>
 
-      {/* NR Trend Chart */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-gray-700">
-            NR Trend — {selectedNJName}
-          </h2>
-          <NJFilter value={njId} onChange={setNjId} />
-        </div>
-        {singleNR
-          ? <NRTrendChart records={singleNR} />
-          : <div className="animate-pulse h-48 bg-gray-50 rounded-xl" />}
-      </div>
     </div>
   );
 }
