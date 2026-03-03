@@ -81,8 +81,8 @@ export default function OverviewPage() {
   if (!njs) {
     return (
       <div className="space-y-6 animate-fade-in">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {[...Array(3)].map((_, i) => <div key={i} className="shimmer h-32 rounded-2xl" />)}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {[...Array(5)].map((_, i) => <div key={i} className="shimmer h-24 rounded-2xl" />)}
         </div>
         <div className="shimmer h-96 rounded-2xl" />
       </div>
@@ -96,7 +96,21 @@ export default function OverviewPage() {
     return (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0);
   });
 
-  const activeCount = allNJs.filter((n: Doc<"newJoiners">) => n.isActive).length;
+  const activeCount    = allNJs.filter((n: Doc<"newJoiners">) => n.isActive).length;
+  const devCount       = allNJs.filter((n: Doc<"newJoiners">) => getDisplayCategory(n) === "Developed").length;
+  const notDevCount    = allNJs.filter((n: Doc<"newJoiners">) => getDisplayCategory(n) === "Not Developed").length;
+  const wipCount       = allNJs.filter((n: Doc<"newJoiners">) => getDisplayCategory(n) === "STP WIP").length;
+  const inactiveCount  = allNJs.filter((n: Doc<"newJoiners">) => !n.isActive).length;
+  const alertCount     = alerts?.length ?? 0;
+  const devRate        = (devCount + notDevCount) > 0 ? Math.round(devCount / (devCount + notDevCount) * 100) : 0;
+
+  const categoryCounts: Record<string, number> = {
+    "All": allNJs.length,
+    "STP WIP": wipCount,
+    "Developed": devCount,
+    "Not Developed": notDevCount,
+    "Inactive": inactiveCount,
+  };
 
   // Unique manager list sorted alphabetically (exclude blanks)
   const managerList = [...new Set(
@@ -146,6 +160,28 @@ export default function OverviewPage() {
         <ExportButton />
       </div>
 
+      {/* ── KPI Summary Strip ────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 stagger">
+        {([
+          { label: "Active CSMs",   value: activeCount,  sub: "in program",                      bg: "from-indigo-500 to-violet-600",    cat: "All"           },
+          { label: "Developed",     value: devCount,     sub: `${devRate}% success rate`,         bg: "from-emerald-500 to-teal-600",     cat: "Developed"     },
+          { label: "Not Developed", value: notDevCount,  sub: "need support",                     bg: "from-red-500 to-rose-600",         cat: "Not Developed" },
+          { label: "STP WIP",       value: wipCount,     sub: "in training",                      bg: "from-violet-500 to-purple-600",    cat: "STP WIP"       },
+          { label: "Alerts",        value: alertCount,   sub: alertCount > 0 ? "need attention" : "all clear",
+            bg: alertCount > 0 ? "from-amber-500 to-orange-600" : "from-slate-400 to-slate-500", cat: "All"           },
+        ] as { label: string; value: number; sub: string; bg: string; cat: DisplayCategory | "All" }[]).map((kpi) => (
+          <button
+            key={kpi.label}
+            onClick={() => setCategoryFilter(kpi.cat)}
+            className={`bg-gradient-to-br ${kpi.bg} rounded-2xl p-4 text-white text-left shadow-lg card-hover focus:outline-none animate-slide-up w-full`}
+          >
+            <div className="text-[11px] font-medium text-white/70 mb-1">{kpi.label}</div>
+            <div className="text-3xl font-black tabular-nums">{kpi.value}</div>
+            <div className="text-[11px] text-white/60 mt-1">{kpi.sub}</div>
+          </button>
+        ))}
+      </div>
+
       {/* ── Table + Detail Panel ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -177,13 +213,16 @@ export default function OverviewPage() {
                   <button
                     key={opt}
                     onClick={() => setCategoryFilter(opt)}
-                    className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all border ${
+                    className={`px-3 py-1 rounded-full text-[11px] font-semibold transition-all border flex items-center gap-1 ${
                       categoryFilter === opt
                         ? "bg-indigo-600 text-white border-indigo-600"
                         : "bg-white text-gray-500 border-gray-200 hover:border-indigo-300 hover:text-indigo-600"
                     }`}
                   >
                     {opt}
+                    <span className={`text-[10px] ${categoryFilter === opt ? "text-white/70" : "text-gray-400"}`}>
+                      {categoryCounts[opt]}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -219,8 +258,8 @@ export default function OverviewPage() {
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-gray-50/90 backdrop-blur-sm border-b border-gray-100">
                     <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Name</th>
                     <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Emp ID</th>
                     <th className="text-left px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Category</th>
@@ -249,7 +288,14 @@ export default function OverviewPage() {
                         }`}
                       >
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                              nj.isActive
+                                ? "bg-gradient-to-br from-indigo-400 to-violet-500 text-white shadow-sm"
+                                : "bg-gray-200 text-gray-400"
+                            }`}>
+                              {initials(nj.name)}
+                            </div>
                             {hasAlert && <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />}
                             <button
                               onClick={(e) => {

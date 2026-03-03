@@ -132,18 +132,28 @@ export function MonthlyNRGrid({ records, months, njIds, njNames, njJoinDates, nj
                   )}>
                     <button
                       onClick={() => onSelect?.(isSelected ? "" : njId)}
-                      className="text-left w-full cursor-pointer"
+                      className="text-left w-full cursor-pointer flex items-center gap-2"
                     >
-                      <p className={clsx(
-                        "font-semibold",
-                        isSelected ? "text-indigo-700" : "text-gray-700 hover:text-indigo-600"
+                      <div className={clsx(
+                        "w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold flex-shrink-0",
+                        isSelected
+                          ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white"
+                          : "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
                       )}>
-                        {njNames[njId] ?? njId}
-                        {isSelected && <span className="ml-1.5 text-[9px] font-bold text-indigo-400 uppercase tracking-wider">▲</span>}
-                      </p>
-                      {njJoinDates?.[njId] && (
-                        <p className="text-[10px] text-gray-400 mt-0.5">{fmtTenure(njJoinDates[njId])}</p>
-                      )}
+                        {(njNames[njId] ?? njId).split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase()}
+                      </div>
+                      <div>
+                        <p className={clsx(
+                          "font-semibold",
+                          isSelected ? "text-indigo-700" : "text-gray-700 hover:text-indigo-600"
+                        )}>
+                          {njNames[njId] ?? njId}
+                          {isSelected && <span className="ml-1.5 text-[9px] font-bold text-indigo-400 uppercase tracking-wider">▲</span>}
+                        </p>
+                        {njJoinDates?.[njId] && (
+                          <p className="text-[10px] text-gray-400 mt-0.5">{fmtTenure(njJoinDates[njId])}</p>
+                        )}
+                      </div>
                     </button>
                   </td>
                   {months.map(m => {

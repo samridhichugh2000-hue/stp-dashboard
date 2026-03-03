@@ -11,6 +11,7 @@ import {
   Building2,
   Award,
   Target,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   Zap,
@@ -29,6 +30,13 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
+  {
+    label: "Target Vs Achievement",
+    href: "/dashboard/target",
+    icon: <Target size={17} />,
+    roles: ["admin", "manager", "viewer"],
+    color: "from-cyan-400 to-blue-600",
+  },
   {
     label: "Overview",
     href: "/dashboard/overview",
@@ -72,11 +80,11 @@ const navItems: NavItem[] = [
     color: "from-rose-400 to-rose-600",
   },
   {
-    label: "Target Vs Achievement",
-    href: "/dashboard/target",
-    icon: <Target size={17} />,
-    roles: ["admin", "manager", "viewer"],
-    color: "from-cyan-400 to-blue-600",
+    label: "FAQ & Documents",
+    href: "/dashboard/faq",
+    icon: <BookOpen size={17} />,
+    roles: ["admin", "manager", "viewer", "nj"],
+    color: "from-sky-400 to-cyan-600",
   },
 ];
 

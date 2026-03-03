@@ -187,6 +187,28 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_token", ["tokenIdentifier"]),
 
+  // Documents library
+  documents: defineTable({
+    title: v.string(),
+    category: v.string(),          // "SOS" | "Training Plan" | "Policy" | "Other"
+    description: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),  // Convex file storage
+    fileName: v.optional(v.string()),
+    fileSize: v.optional(v.number()),         // bytes
+    fileType: v.optional(v.string()),         // "pdf" | "docx" | "xlsx" etc.
+    uploadedBy: v.string(),
+    uploadedAt: v.string(),
+  }).index("by_category", ["category"]),
+
+  // FAQs
+  faqs: defineTable({
+    question: v.string(),
+    answer: v.string(),
+    category: v.optional(v.string()),
+    order: v.optional(v.number()),
+    createdAt: v.string(),
+  }).index("by_category", ["category"]),
+
   // Sync logs for RMS adapter health
   syncLogs: defineTable({
     module: v.string(),

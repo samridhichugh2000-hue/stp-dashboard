@@ -517,8 +517,8 @@ export default function ROIPage() {
               </div>
             )}
             <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b-2 border-gray-100 bg-gray-50/60">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b-2 border-gray-100 bg-gray-50/90 backdrop-blur-sm">
                   <th className="text-left py-2 px-3 text-xs font-semibold text-gray-400 w-8">#</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-gray-400">CSM Name</th>
                   <th className="text-left py-2 px-3 text-xs font-semibold text-gray-400">DOJ</th>
@@ -553,10 +553,17 @@ export default function ROIPage() {
                           onClick={() => setSelectedCSM(isSelected ? null : row.cce)}>
                           <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
                           <td className="py-2.5 px-3">
-                            <p className={`text-xs font-semibold group-hover:text-indigo-700 ${isSelected ? "text-indigo-700" : "text-gray-800"}`}>{row.cce}</p>
-                            {meta?.designation && (
-                              <p className="text-[10px] text-gray-400 mt-0.5">{meta.designation}</p>
-                            )}
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0 shadow-sm ${isSelected ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white" : "bg-gradient-to-br from-indigo-400 to-violet-500 text-white"}`}>
+                                {row.cce.split(" ").map((p: string) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase()}
+                              </div>
+                              <div>
+                                <p className={`text-xs font-semibold group-hover:text-indigo-700 ${isSelected ? "text-indigo-700" : "text-gray-800"}`}>{row.cce}</p>
+                                {meta?.designation && (
+                                  <p className="text-[10px] text-gray-400 mt-0.5">{meta.designation}</p>
+                                )}
+                              </div>
+                            </div>
                           </td>
                           <td className="py-2.5 px-3 text-xs text-gray-500 whitespace-nowrap">
                             {meta?.joinDate ? fmtDOJ(meta.joinDate) : <span className="text-gray-300">—</span>}

@@ -299,8 +299,8 @@ export default function RCBPage() {
         {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
-            <thead>
-              <tr className="border-b-2 border-gray-100 bg-gray-50/60">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b-2 border-gray-100 bg-gray-50/90 backdrop-blur-sm">
                 <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-400 w-8">#</th>
                 <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-400">CSM Name</th>
                 <th className="text-left py-2.5 px-3 text-xs font-semibold text-gray-400">Tenure</th>
@@ -320,10 +320,17 @@ export default function RCBPage() {
                   <tr key={row._id} className="hover:bg-indigo-50/30 transition-colors group">
                     <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
                     <td className="py-2.5 px-3">
-                      <p className="text-xs font-semibold text-gray-800 group-hover:text-gray-900">{row.name}</p>
-                      {row.designation && (
-                        <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>
-                      )}
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 shadow-sm">
+                          {row.name.split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-gray-800 group-hover:text-gray-900">{row.name}</p>
+                          {row.designation && (
+                            <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="py-2.5 px-3 text-xs text-gray-500">{fmtTenure(row.joinDate)}</td>
                     <td className="py-2.5 px-3 text-right">
