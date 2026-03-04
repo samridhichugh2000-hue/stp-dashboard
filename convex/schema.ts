@@ -192,10 +192,11 @@ export default defineSchema({
     title: v.string(),
     category: v.string(),          // "SOS" | "Training Plan" | "Policy" | "Other"
     description: v.optional(v.string()),
-    storageId: v.optional(v.id("_storage")),  // Convex file storage
+    storageId: v.optional(v.id("_storage")),  // Convex file storage (legacy)
     fileName: v.optional(v.string()),
     fileSize: v.optional(v.number()),         // bytes
     fileType: v.optional(v.string()),         // "pdf" | "docx" | "xlsx" etc.
+    linkUrl: v.optional(v.string()),          // external link URL
     uploadedBy: v.string(),
     uploadedAt: v.string(),
   }).index("by_category", ["category"]),
