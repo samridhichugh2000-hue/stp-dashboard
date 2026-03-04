@@ -125,20 +125,36 @@ export const syncRCBFromAPI = internalAction({
       if (data.statuscode !== 200) throw new Error(`GetRCBData failed (${data.statuscode}): ${data.message}`);
 
       const rawRecords: unknown[] = Array.isArray(data.content) ? data.content : [];
-      console.log(`[syncRCBFromAPI] Received ${rawRecords.length} summary records.`);
+      console.log(`[syncRCBFromAPI] Received ${rawRecords.length} detail records.`);
 
-      let count = 0;
+      // API returns one row per corporate (not one per CSM), so aggregate by empId first.
+      const aggregated = new Map<string, { claimedCorporates: number; nrFromCorporates: number; noOfClients: number }>();
       let skipped = 0;
 
       for (const raw of rawRecords) {
         const parsed = parseRCBSummaryRecord(raw as Record<string, unknown>);
         if (!parsed) { skipped++; continue; }
+        const existing = aggregated.get(parsed.empId);
+        if (existing) {
+          existing.claimedCorporates += 1; // each row = one corporate
+          existing.nrFromCorporates += parsed.nrFromCorporates;
+          existing.noOfClients += parsed.noOfClients;
+        } else {
+          aggregated.set(parsed.empId, {
+            claimedCorporates: 1,
+            nrFromCorporates: parsed.nrFromCorporates,
+            noOfClients: parsed.noOfClients,
+          });
+        }
+      }
 
+      let count = 0;
+      for (const [empId, agg] of aggregated) {
         await ctx.runMutation(internal.mutations.rcb.upsertRCBSummary, {
-          empId: parsed.empId,
-          claimedCorporates: parsed.claimedCorporates,
-          nrFromCorporates: parsed.nrFromCorporates,
-          noOfClients: parsed.noOfClients,
+          empId,
+          claimedCorporates: agg.claimedCorporates,
+          nrFromCorporates: agg.nrFromCorporates,
+          noOfClients: agg.noOfClients,
         });
         count++;
       }
@@ -190,13 +206,22 @@ export const getRCBForRange = action({
     if (data.statuscode !== 200) throw new Error(`GetRCBData failed (${data.statuscode}): ${data.message}`);
 
     const rawRecords: unknown[] = Array.isArray(data.content) ? data.content : [];
-    const results: Array<{ empId: string; claimedCorporates: number; nrFromCorporates: number; noOfClients: number }> = [];
 
+    // Aggregate by empId: one row per corporate in API response.
+    const aggregated = new Map<string, { claimedCorporates: number; nrFromCorporates: number; noOfClients: number }>();
     for (const raw of rawRecords) {
       const parsed = parseRCBSummaryRecord(raw as Record<string, unknown>);
-      if (parsed) results.push(parsed);
+      if (!parsed) continue;
+      const existing = aggregated.get(parsed.empId);
+      if (existing) {
+        existing.claimedCorporates += 1;
+        existing.nrFromCorporates += parsed.nrFromCorporates;
+        existing.noOfClients += parsed.noOfClients;
+      } else {
+        aggregated.set(parsed.empId, { claimedCorporates: 1, nrFromCorporates: parsed.nrFromCorporates, noOfClients: parsed.noOfClients });
+      }
     }
 
-    return results;
+    return Array.from(aggregated.entries()).map(([empId, agg]) => ({ empId, ...agg }));
   },
 });
