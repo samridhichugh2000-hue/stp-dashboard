@@ -5,8 +5,8 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Id } from "@/../convex/_generated/dataModel";
 import {
-  BookOpen, FileText, HelpCircle, Plus, Trash2,
-  ChevronDown, ChevronUp, Download, X, Search, Pencil, Link, ExternalLink,
+  FileText, HelpCircle, Plus, Trash2,
+  ChevronDown, ChevronUp, X, Search, Pencil, Link, ExternalLink,
 } from "lucide-react";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -130,56 +130,6 @@ function AddLinkModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Viewer Modal ─────────────────────────────────────────────────────────────
-
-function ViewerModal({ doc, onClose }: {
-  doc: { title: string; linkUrl?: string | null; url?: string | null; fileName?: string | null; category: string };
-  onClose: () => void;
-}) {
-  const viewUrl = doc.linkUrl ?? doc.url ?? "";
-
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col animate-scale-in" style={{ height: "88vh" }}>
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 flex-shrink-0">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${CAT_ICON_COLORS[doc.category] ?? "from-slate-400 to-gray-500"} flex items-center justify-center text-sm flex-shrink-0`}>
-              <FileText size={13} className="text-white" />
-            </div>
-            <p className="text-sm font-semibold text-gray-900 truncate">{doc.title}</p>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-            <a href={viewUrl} download target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition-colors">
-              <Download size={12} /> Download
-            </a>
-            <a href={viewUrl} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-xs font-semibold hover:bg-gray-50 transition-colors">
-              <ExternalLink size={12} /> Open in new tab
-            </a>
-            <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-        {/* iframe viewer */}
-        <div className="flex-1 overflow-hidden rounded-b-2xl bg-gray-50">
-          {viewUrl ? (
-            <iframe
-              src={viewUrl}
-              className="w-full h-full border-0"
-              title={doc.title}
-              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-            />
-          ) : (
-            <div className="flex items-center justify-center h-full text-gray-400 text-sm">No preview available</div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── FAQ Modal ────────────────────────────────────────────────────────────────
 
@@ -269,8 +219,6 @@ export default function FAQPage() {
   const [openFAQ,      setOpenFAQ]      = useState<string | null>(null);
   const [showAddLink,  setShowAddLink]  = useState(false);
   const [showFAQModal, setShowFAQModal] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [viewingDoc,   setViewingDoc]   = useState<any>(null);
   const [editingFAQ,   setEditingFAQ]   = useState<{ id: Id<"faqs">; question: string; answer: string; category?: string } | null>(null);
 
   const documents = useQuery(api.queries.documents.list);
@@ -385,9 +333,11 @@ export default function FAQPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredDocs.map(doc => (
-                <div key={doc._id}
-                  onClick={() => setViewingDoc(doc)}
-                  className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all p-5 flex flex-col gap-3 cursor-pointer group">
+                <a key={doc._id}
+                  href={(doc.linkUrl ?? doc.url) || "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all p-5 flex flex-col gap-3 cursor-pointer group no-underline block">
                   {/* Top row */}
                   <div className="flex items-start gap-3">
                     <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${CAT_ICON_COLORS[doc.category] ?? "from-slate-400 to-gray-500"} flex items-center justify-center flex-shrink-0 shadow-sm`}>
@@ -420,7 +370,7 @@ export default function FAQPage() {
                       </button>
                     </div>
                   </div>
-                </div>
+                </a>
               ))}
             </div>
           )}
@@ -500,7 +450,6 @@ export default function FAQPage() {
 
       {/* Modals */}
       {showAddLink && <AddLinkModal onClose={() => setShowAddLink(false)} />}
-      {viewingDoc  && <ViewerModal doc={viewingDoc} onClose={() => setViewingDoc(null)} />}
       {(showFAQModal || editingFAQ) && (
         <FAQModal
           initial={editingFAQ ?? undefined}
