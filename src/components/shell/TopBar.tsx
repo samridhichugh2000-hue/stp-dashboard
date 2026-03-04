@@ -1,8 +1,10 @@
 "use client";
 
-import { Bell, RefreshCw, ChevronDown, Menu } from "lucide-react";
-import { useState } from "react";
+import { Bell, RefreshCw, ChevronDown, Menu, LogOut } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { useRouter } from "next/navigation";
 import { api } from "@/../convex/_generated/api";
 import { Doc } from "@/../convex/_generated/dataModel";
 
@@ -37,8 +39,27 @@ function getInitials(name: string) {
 }
 
 export function TopBar({ userName, userRole, onRefresh, onMobileNavOpen }: TopBarProps) {
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [userMenuOpen,  setUserMenuOpen]  = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const { signOut } = useAuthActions();
+  const router = useRouter();
   const syncLogs = useQuery(api.queries.syncLogs.latestByModule);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  async function handleSignOut() {
+    await signOut();
+    router.replace("/login");
+  }
 
   const hasError = syncLogs?.some((l: Doc<"syncLogs">) => l.status === "error");
   const isRunning = syncLogs?.some((l: Doc<"syncLogs">) => l.status === "running");
@@ -149,20 +170,41 @@ export function TopBar({ userName, userRole, onRefresh, onMobileNavOpen }: TopBa
         {/* Divider */}
         <div className="w-px h-7 bg-gray-200" />
 
-        {/* User chip */}
-        <div className="flex items-center gap-2 cursor-pointer group">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold shadow-sm">
-            {getInitials(userName)}
-          </div>
-          <div className="hidden sm:block">
-            <div className="text-xs font-semibold text-gray-900 leading-tight">{userName}</div>
-            <div
-              className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md inline-block mt-0.5 ${ROLE_COLORS[userRole] ?? "bg-gray-100 text-gray-600"}`}
-            >
-              {ROLE_LABEL[userRole] ?? userRole}
+        {/* User chip + dropdown */}
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setUserMenuOpen(v => !v)}
+            className="flex items-center gap-2 cursor-pointer group"
+          >
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xs font-bold shadow-sm">
+              {getInitials(userName)}
             </div>
-          </div>
-          <ChevronDown size={13} className="text-gray-400 group-hover:text-gray-600 transition-colors" />
+            <div className="hidden sm:block text-left">
+              <div className="text-xs font-semibold text-gray-900 leading-tight">{userName}</div>
+              <div
+                className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md inline-block mt-0.5 ${ROLE_COLORS[userRole] ?? "bg-gray-100 text-gray-600"}`}
+              >
+                {ROLE_LABEL[userRole] ?? userRole}
+              </div>
+            </div>
+            <ChevronDown size={13} className={`text-gray-400 group-hover:text-gray-600 transition-all ${userMenuOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {userMenuOpen && (
+            <div className="absolute right-0 top-full mt-2 w-44 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-50 animate-fade-in">
+              <div className="px-3 py-2 border-b border-gray-50">
+                <p className="text-xs font-semibold text-gray-800 truncate">{userName}</p>
+                <p className="text-[10px] text-gray-400 truncate">{ROLE_LABEL[userRole] ?? userRole}</p>
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <LogOut size={13} />
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

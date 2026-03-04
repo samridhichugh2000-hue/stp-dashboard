@@ -49,6 +49,7 @@ import type * as queries_qubits from "../queries/qubits.js";
 import type * as queries_rcb from "../queries/rcb.js";
 import type * as queries_roi from "../queries/roi.js";
 import type * as queries_syncLogs from "../queries/syncLogs.js";
+import type * as queries_users from "../queries/users.js";
 import type * as rms_adapter from "../rms/adapter.js";
 import type * as rms_index from "../rms/index.js";
 import type * as rms_liveClient from "../rms/liveClient.js";
@@ -104,6 +105,7 @@ declare const fullApi: ApiFromModules<{
   "queries/rcb": typeof queries_rcb;
   "queries/roi": typeof queries_roi;
   "queries/syncLogs": typeof queries_syncLogs;
+  "queries/users": typeof queries_users;
   "rms/adapter": typeof rms_adapter;
   "rms/index": typeof rms_index;
   "rms/liveClient": typeof rms_liveClient;

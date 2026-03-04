@@ -6,7 +6,10 @@
       "mcp__ide__getDiagnostics",
       "Bash(python3 -c \":*)",
       "Bash(npx tsc:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(node -e \":*)",
+      "Bash(npx vercel:*)",
+      "Bash(ls:*)"
     ]
   }
 }

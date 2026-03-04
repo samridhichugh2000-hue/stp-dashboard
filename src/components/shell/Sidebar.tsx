@@ -34,42 +34,42 @@ const navItems: NavItem[] = [
     label: "Target Vs Achievement",
     href: "/dashboard/target",
     icon: <Target size={17} />,
-    roles: ["admin", "manager", "viewer"],
+    roles: ["admin", "manager"],
     color: "from-cyan-400 to-blue-600",
   },
   {
     label: "Overview",
     href: "/dashboard/overview",
     icon: <LayoutDashboard size={17} />,
-    roles: ["admin", "manager", "viewer", "nj"],
+    roles: ["admin", "manager", "nj"],
     color: "from-indigo-400 to-indigo-600",
   },
   {
     label: "Qubits",
     href: "/dashboard/qubits",
     icon: <Mic2 size={17} />,
-    roles: ["admin", "manager", "viewer"],
+    roles: ["admin", "manager"],
     color: "from-violet-400 to-violet-600",
   },
   {
     label: "NRD",
     href: "/dashboard/nrd",
     icon: <TrendingUp size={17} />,
-    roles: ["admin", "manager", "viewer"],
+    roles: ["admin", "manager"],
     color: "from-emerald-400 to-emerald-600",
   },
   {
     label: "ROI & Leads",
     href: "/dashboard/roi",
     icon: <BarChart3 size={17} />,
-    roles: ["admin", "manager", "viewer"],
+    roles: ["admin", "manager"],
     color: "from-amber-400 to-amber-600",
   },
   {
     label: "RCB Claims",
     href: "/dashboard/rcb",
     icon: <Building2 size={17} />,
-    roles: ["admin", "manager", "viewer"],
+    roles: ["admin", "manager"],
     color: "from-pink-400 to-pink-600",
   },
   {
@@ -86,6 +86,7 @@ const navItems: NavItem[] = [
     roles: ["admin", "manager", "viewer", "nj"],
     color: "from-sky-400 to-cyan-600",
   },
+  // viewer role only sees FAQ (filtered above); items below are admin/manager only implicitly
 ];
 
 interface SidebarProps {
