@@ -26,10 +26,9 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await signIn("password", { email: email.trim(), password, flow: "signIn" });
-      router.replace("/dashboard/overview");
+      // Redirect handled by useEffect once isAuthenticated propagates
     } catch {
       setError("Invalid email or password. Please try again.");
-    } finally {
       setLoading(false);
     }
   }
