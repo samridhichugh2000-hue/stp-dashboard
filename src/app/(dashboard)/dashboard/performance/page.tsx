@@ -21,16 +21,6 @@ const P_BLACK = { bg: "bg-gray-100",   text: "text-gray-700",   ring: "ring-gray
 const C_GREEN = "#86efac";   // green-300
 const C_RED   = "#fca5a5";   // red-300
 
-/**
- * Developed = ROI positive AND (NR currently positive OR positive within first 4 months).
- * Either metric negative → Not Developed.
- * No data at all → null (no badge).
- */
-function computeDev(nrPositiveMonth: number | null, roiStatus: NRROIStatus, nrStatus: NRROIStatus): boolean | null {
-  if (!roiStatus && !nrStatus) return null;
-  const nrPositive = nrPositiveMonth !== null || nrStatus === "Positive";
-  return roiStatus === "Positive" && nrPositive;
-}
 
 function computeAction(dev: boolean | null, tenure: number): string | null {
   if (dev === null) return null;
@@ -113,7 +103,10 @@ export default function PerformancePage() {
   const njManagerMap = new Map((njs ?? []).map(n => [n._id as string, n.managerId]));
 
   const enriched = rows?.map(row => {
-    const dev = computeDev(row.nrPositiveMonth, row.roiStatus, row.nrStatus);
+    // Use DB-stored category as source of truth (same as overview page)
+    const dev = row.category === "Developed" ? true
+              : row.category === "Uncategorised" ? null
+              : false;
     return {
       ...row,
       dev,
