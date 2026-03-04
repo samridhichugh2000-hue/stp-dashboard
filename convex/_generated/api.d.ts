@@ -37,6 +37,7 @@ import type * as mutations_performanceAlerts from "../mutations/performanceAlert
 import type * as mutations_qubits from "../mutations/qubits.js";
 import type * as mutations_rcb from "../mutations/rcb.js";
 import type * as mutations_roi from "../mutations/roi.js";
+import type * as mutations_setUserRole from "../mutations/setUserRole.js";
 import type * as mutations_syncLogs from "../mutations/syncLogs.js";
 import type * as queries_documents from "../queries/documents.js";
 import type * as queries_faqs from "../queries/faqs.js";
@@ -93,6 +94,7 @@ declare const fullApi: ApiFromModules<{
   "mutations/qubits": typeof mutations_qubits;
   "mutations/rcb": typeof mutations_rcb;
   "mutations/roi": typeof mutations_roi;
+  "mutations/setUserRole": typeof mutations_setUserRole;
   "mutations/syncLogs": typeof mutations_syncLogs;
   "queries/documents": typeof queries_documents;
   "queries/faqs": typeof queries_faqs;

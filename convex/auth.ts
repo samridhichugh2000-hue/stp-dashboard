@@ -7,7 +7,16 @@ import { convexAuth } from "@convex-dev/auth/server";
 import { Password } from "@convex-dev/auth/providers/Password";
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
-  providers: [Password],
+  providers: [
+    Password({
+      // Allow passwords of any length ≥ 6 characters
+      validatePasswordRequirements: (password: string) => {
+        if (password.length < 6) {
+          throw new Error("Password must be at least 6 characters");
+        }
+      },
+    }),
+  ],
   callbacks: {
     async createOrUpdateUser(ctx, args) {
       if (args.existingUserId) {

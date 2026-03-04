@@ -1,7 +1,9 @@
 import { defineSchema, defineTable } from "convex/server";
+import { authTables } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  ...authTables,
   // New Joiners master table
   newJoiners: defineTable({
     name: v.string(),
@@ -219,41 +221,4 @@ export default defineSchema({
     recordsProcessed: v.optional(v.number()),
   }).index("by_module", ["module"]),
 
-  // Convex Auth tables
-  authAccounts: defineTable({
-    userId: v.id("users"),
-    provider: v.string(),
-    providerAccountId: v.string(),
-    secret: v.optional(v.string()),
-  })
-    .index("by_provider_account", ["provider", "providerAccountId"])
-    .index("by_user", ["userId"]),
-
-  authSessions: defineTable({
-    userId: v.id("users"),
-    expirationTime: v.number(),
-  }).index("by_user", ["userId"]),
-
-  authVerificationCodes: defineTable({
-    userId: v.optional(v.id("users")),
-    email: v.optional(v.string()),
-    phone: v.optional(v.string()),
-    code: v.string(),
-    expirationTime: v.number(),
-    verifiedTime: v.optional(v.number()),
-    provider: v.string(),
-  })
-    .index("by_email", ["email"])
-    .index("by_phone", ["phone"]),
-
-  authRefreshTokens: defineTable({
-    sessionId: v.id("authSessions"),
-    expirationTime: v.number(),
-  }).index("by_session", ["sessionId"]),
-
-  authRateLimits: defineTable({
-    identifier: v.string(),
-    lastAttemptTime: v.number(),
-    attemptsCount: v.number(),
-  }).index("by_identifier", ["identifier"]),
 });
