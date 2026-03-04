@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
@@ -19,10 +19,9 @@ export default function LoginPage() {
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
 
-  if (isAuthenticated) {
-    router.replace("/dashboard/overview");
-    return null;
-  }
+  useEffect(() => {
+    if (isAuthenticated) router.replace("/dashboard/overview");
+  }, [isAuthenticated, router]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();

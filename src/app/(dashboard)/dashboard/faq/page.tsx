@@ -221,6 +221,8 @@ export default function FAQPage() {
   const [showFAQModal, setShowFAQModal] = useState(false);
   const [editingFAQ,   setEditingFAQ]   = useState<{ id: Id<"faqs">; question: string; answer: string; category?: string } | null>(null);
 
+  const me        = useQuery(api.queries.users.me);
+  const isAdmin   = me?.role === "admin" || me?.role === "manager";
   const documents = useQuery(api.queries.documents.list);
   const faqs      = useQuery(api.queries.faqs.list);
   const removeDoc = useMutation(api.mutations.documents.remove);
@@ -262,13 +264,15 @@ export default function FAQPage() {
           <h1 className="text-2xl font-bold text-gray-900">FAQ &amp; Documents</h1>
           <p className="text-sm text-gray-500 mt-0.5">Training resources, policies and common questions</p>
         </div>
-        <button
-          onClick={() => tab === "documents" ? setShowAddLink(true) : setShowFAQModal(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-sm"
-        >
-          <Plus size={15} />
-          {tab === "documents" ? "Add Document" : "Add FAQ"}
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => tab === "documents" ? setShowAddLink(true) : setShowFAQModal(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 active:scale-95 transition-all shadow-sm"
+          >
+            <Plus size={15} />
+            {tab === "documents" ? "Add Document" : "Add FAQ"}
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -363,11 +367,13 @@ export default function FAQPage() {
                       <span className="text-[10px] text-indigo-500 font-medium group-hover:text-indigo-700 transition-colors flex items-center gap-1">
                         <ExternalLink size={10} /> View
                       </span>
-                      <button
-                        onClick={e => { e.stopPropagation(); removeDoc({ id: doc._id as Id<"documents"> }); }}
-                        className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all">
-                        <Trash2 size={13} />
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={e => { e.stopPropagation(); removeDoc({ id: doc._id as Id<"documents"> }); }}
+                          className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all">
+                          <Trash2 size={13} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </a>
@@ -419,14 +425,18 @@ export default function FAQPage() {
                             </div>
                             <p className="flex-1 text-sm font-semibold text-gray-800">{faq.question}</p>
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <button onClick={e => { e.stopPropagation(); setEditingFAQ({ id: faq._id as Id<"faqs">, question: faq.question, answer: faq.answer, category: faq.category }); }}
-                                className="p-1.5 rounded-lg text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-all">
-                                <Pencil size={12} />
-                              </button>
-                              <button onClick={e => { e.stopPropagation(); removeFAQ({ id: faq._id as Id<"faqs"> }); }}
-                                className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all">
-                                <Trash2 size={12} />
-                              </button>
+                              {isAdmin && (
+                                <>
+                                  <button onClick={e => { e.stopPropagation(); setEditingFAQ({ id: faq._id as Id<"faqs">, question: faq.question, answer: faq.answer, category: faq.category }); }}
+                                    className="p-1.5 rounded-lg text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-all">
+                                    <Pencil size={12} />
+                                  </button>
+                                  <button onClick={e => { e.stopPropagation(); removeFAQ({ id: faq._id as Id<"faqs"> }); }}
+                                    className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all">
+                                    <Trash2 size={12} />
+                                  </button>
+                                </>
+                              )}
                               {isOpen ? <ChevronUp size={15} className="text-indigo-500" /> : <ChevronDown size={15} className="text-gray-400" />}
                             </div>
                           </div>
