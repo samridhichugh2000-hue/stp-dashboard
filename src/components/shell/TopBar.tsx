@@ -61,7 +61,7 @@ export function TopBar({ userName, userRole, onRefresh, onMobileNavOpen }: TopBa
     router.replace("/login");
   }
 
-  const hasError = syncLogs?.some((l: Doc<"syncLogs">) => l.status === "error");
+  const hasError = false; // hidden
   const isRunning = syncLogs?.some((l: Doc<"syncLogs">) => l.status === "running");
 
   const lastSync = syncLogs
