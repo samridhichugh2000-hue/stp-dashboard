@@ -15,12 +15,21 @@ export default function NRDPage() {
   const grid = useQuery(api.queries.nr.monthlyGrid);
   const stats = useQuery(api.queries.nr.nrdStats);
 
-  const managerList = [...new Set((njs ?? []).map((n: Doc<"newJoiners">) => n.managerId).filter(Boolean))].sort() as string[];
-  const filteredNjs = managerFilter === "All" ? (njs ?? []) : (njs ?? []).filter((n: Doc<"newJoiners">) => n.managerId === managerFilter);
+  const isGarbageId = (id: string) => id.length >= 25 && !/\s/.test(id) && /^[a-zA-Z0-9]+$/.test(id);
+  const validNjs = (njs ?? []).filter((n: Doc<"newJoiners">) => {
+    if (!n.empId) return false;
+    if (n.empId.startsWith("MOCK-")) return false;
+    if (isGarbageId(n.managerId ?? "")) return false;
+    return true;
+  });
+  const managerList = [...new Set(validNjs.map((n: Doc<"newJoiners">) => n.managerId).filter(
+    (m): m is string => Boolean(m)
+  ))].sort();
+  const filteredNjs = managerFilter === "All" ? validNjs : validNjs.filter((n: Doc<"newJoiners">) => n.managerId === managerFilter);
 
-  const njNames = Object.fromEntries((njs ?? []).map((n: Doc<"newJoiners">) => [n._id, n.name]));
-  const njJoinDates = Object.fromEntries((njs ?? []).map((n: Doc<"newJoiners">) => [n._id, n.joinDate]));
-  const njTenures = Object.fromEntries((njs ?? []).map((n: Doc<"newJoiners">) => [n._id, n.tenureMonths]));
+  const njNames = Object.fromEntries(validNjs.map((n: Doc<"newJoiners">) => [n._id, n.name]));
+  const njJoinDates = Object.fromEntries(validNjs.map((n: Doc<"newJoiners">) => [n._id, n.joinDate]));
+  const njTenures = Object.fromEntries(validNjs.map((n: Doc<"newJoiners">) => [n._id, n.tenureMonths]));
   const njIds = filteredNjs.map((n: Doc<"newJoiners">) => n._id);
 
   const statCards = [

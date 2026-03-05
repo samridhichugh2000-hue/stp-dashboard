@@ -88,7 +88,10 @@ export default function RCBPage() {
 
   if (!rows) return <div className="animate-pulse h-96 bg-white/60 rounded-2xl" />;
 
-  const managerList = [...new Set((njs ?? []).map(n => n.managerId).filter(Boolean))].sort() as string[];
+  const isGarbageId = (id: string) => id.length >= 25 && !/\s/.test(id) && /^[a-zA-Z0-9]+$/.test(id);
+  const managerList = [...new Set((njs ?? []).map(n => n.managerId).filter(
+    (m): m is string => Boolean(m) && !isGarbageId(m)
+  ))].sort();
   const njManagerMap = new Map((njs ?? []).map(n => [n._id as string, n.managerId]));
 
   // ── Merge custom data if a date-range fetch is active ─────────────────────

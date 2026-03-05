@@ -6,7 +6,7 @@ import { api } from "@/../convex/_generated/api";
 import { clsx } from "clsx";
 import {
   PieChart, Pie, Cell, Legend, ResponsiveContainer, Sector,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LabelList,
 } from "recharts";
 import { fmtTenure } from "@/lib/formatTenure";
 
@@ -99,10 +99,16 @@ export default function PerformancePage() {
   const rows = useQuery(api.queries.performance.njPerformanceStatus);
   const njs  = useQuery(api.queries.newJoiners.list, {});
 
-  const managerList = [...new Set((njs ?? []).map(n => n.managerId).filter(Boolean))].sort() as string[];
+  const isGarbageId = (id: string) =>
+    id.length >= 25 && !/\s/.test(id) && /^[a-zA-Z0-9]+$/.test(id);
+  const managerList = [...new Set((njs ?? []).map(n => n.managerId).filter(
+    (m): m is string => Boolean(m) && !isGarbageId(m)
+  ))].sort();
   const njManagerMap = new Map((njs ?? []).map(n => [n._id as string, n.managerId]));
 
-  const enriched = rows?.map(row => {
+  // Only keep rows whose NJ ID exists in the filtered njs list (removes garbage records)
+  const validNJIds = new Set((njs ?? []).map(n => n._id as string));
+  const enriched = rows?.filter(row => validNJIds.size === 0 || validNJIds.has(row._id as string)).map(row => {
     // Use DB-stored category as source of truth (same as overview page)
     const dev = row.category === "Developed" ? true
               : row.category === "Uncategorised" ? null
@@ -115,12 +121,15 @@ export default function PerformancePage() {
   });
 
   const q = search.trim().toLowerCase();
-  const filtered = enriched?.filter(r => {
-    const matchesSearch = !q || r.name.toLowerCase().includes(q);
-    const matchesManager = managerFilter === "All" || njManagerMap.get(r._id as string) === managerFilter;
-    return matchesSearch && matchesManager;
-  });
+  const filtered = enriched
+    ?.filter(r => {
+      const matchesSearch = !q || r.name.toLowerCase().includes(q);
+      const matchesManager = managerFilter === "All" || njManagerMap.get(r._id as string) === managerFilter;
+      return matchesSearch && matchesManager;
+    })
+    .sort((a, b) => new Date(b.joinDate).getTime() - new Date(a.joinDate).getTime());
 
+  // ── Overall stat counts (always from full enriched set) ──────────────────
   const devCount    = enriched?.filter(r => r.dev === true).length  ?? 0;
   const notDevCount = enriched?.filter(r => r.dev === false).length ?? 0;
   const underObs    = enriched?.filter(r => r.suggestedAction === "Under Observation").length ?? 0;
@@ -133,24 +142,64 @@ export default function PerformancePage() {
     { label: "PA/PIP Suggested",  value: pipCount,    desc: "Negative beyond 4 months", bg: "from-rose-500 to-red-600" },
   ];
 
-  // Pie chart data
+  // ── Chart data — all charts use `filtered` so they react to manager filter ─
+  const chartRows = filtered ?? [];
+  const chartLabel = managerFilter !== "All" ? managerFilter : "All CSMs";
+
+  // Donut — Developed vs Not Developed (filtered)
+  const fDevCount    = chartRows.filter(r => r.dev === true).length;
+  const fNotDevCount = chartRows.filter(r => r.dev === false).length;
+  const fWipCount    = chartRows.filter(r => r.dev === null).length;
   const pieData = [
-    { name: "Developed",     value: devCount,    color: C_GREEN },
-    { name: "Not Developed", value: notDevCount, color: C_RED   },
+    { name: "Developed",     value: fDevCount,    color: C_GREEN   },
+    { name: "Not Developed", value: fNotDevCount, color: C_RED     },
+    { name: "Pending Eval",  value: fWipCount,    color: "#c4b5fd" },
   ].filter(d => d.value > 0);
 
-  // Bar chart by tenure group
+  // Grouped bar — Developed vs Not Developed by tenure (filtered)
   const tenureGroups = [
     { name: "≤ 2 mo", Developed: 0, "Not Developed": 0 },
     { name: "3–4 mo", Developed: 0, "Not Developed": 0 },
     { name: "> 4 mo", Developed: 0, "Not Developed": 0 },
   ];
-  enriched?.forEach(r => {
+  chartRows.forEach(r => {
     if (r.dev === null) return;
     const b = r.tenureMonths <= 2 ? 0 : r.tenureMonths <= 4 ? 1 : 2;
     if (r.dev) tenureGroups[b].Developed++;
     else tenureGroups[b]["Not Developed"]++;
   });
+
+  // Bar — NR status breakdown (filtered)
+  const nrBarData = [
+    { name: "Positive NR", count: chartRows.filter(r => r.nrStatus === "Positive").length, fill: C_GREEN },
+    { name: "Negative NR", count: chartRows.filter(r => r.nrStatus === "Negative").length, fill: C_RED   },
+    { name: "No Data",     count: chartRows.filter(r => r.nrStatus === null).length,        fill: "#e5e7eb" },
+  ].filter(d => d.count > 0);
+
+  // Bar — Suggested action breakdown (filtered)
+  const actionBarData = [
+    { name: "On Track",         count: chartRows.filter(r => r.suggestedAction === "On Track").length,        fill: C_GREEN   },
+    { name: "Under Obs.",       count: chartRows.filter(r => r.suggestedAction === "Under Observation").length, fill: "#c4b5fd" },
+    { name: "PA/PIP",           count: chartRows.filter(r => r.suggestedAction === "PA/PIP Suggested").length,  fill: C_RED     },
+    { name: "Pending",          count: chartRows.filter(r => r.suggestedAction === null).length,               fill: "#e5e7eb" },
+  ].filter(d => d.count > 0);
+
+  // Bar — Manager comparison (only when All managers)
+  const managerCompData = managerFilter === "All"
+    ? managerList.map(mgr => {
+        const mRows = enriched?.filter(r => njManagerMap.get(r._id as string) === mgr) ?? [];
+        const mDev = mRows.filter(r => r.dev === true).length;
+        const mTotal = mRows.filter(r => r.dev !== null).length;
+        return {
+          name: mgr.split(" ")[0], // first name for brevity
+          fullName: mgr,
+          Developed: mDev,
+          "Not Developed": mRows.filter(r => r.dev === false).length,
+          total: mTotal,
+          rate: mTotal > 0 ? Math.round(mDev / mTotal * 100) : 0,
+        };
+      }).filter(m => m.total > 0)
+    : [];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -160,7 +209,7 @@ export default function PerformancePage() {
         <p className="text-sm text-gray-500 mt-0.5">Development status and suggested actions per CSM</p>
       </div>
 
-      {/* Stat cards */}
+      {/* Stat cards — always overall totals */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 stagger">
         {statCards.map((c) => (
           <div key={c.label} className={`bg-gradient-to-br ${c.bg} rounded-2xl p-5 text-white shadow-lg card-hover`}>
@@ -172,6 +221,140 @@ export default function PerformancePage() {
           </div>
         ))}
       </div>
+
+      {/* ── Charts (react to manager filter) ──────────────────────────────────── */}
+      {rows && (
+        <>
+          {/* Context label */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-gray-700">Charts</span>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2.5 py-1 rounded-full">
+              {chartLabel} · {chartRows.length} CSM{chartRows.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          {/* Row 1: Donut + Tenure grouped bar */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Donut — Developed / Not Developed / Pending */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-0.5">Development Distribution</h2>
+              <p className="text-xs text-gray-400 mb-2">{chartLabel} · hover to explore</p>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      {...{ activeIndex: activeIdx }}
+                      activeShape={renderActiveShape as never}
+                      data={pieData}
+                      cx="50%" cy="50%"
+                      innerRadius={60} outerRadius={88}
+                      dataKey="value"
+                      onMouseEnter={(_, index) => setActiveIdx(index)}
+                    >
+                      {pieData.map((entry, i) => (
+                        <Cell key={i} fill={entry.color} stroke="white" strokeWidth={3} />
+                      ))}
+                    </Pie>
+                    <Legend iconType="circle" iconSize={10}
+                      formatter={(value) => <span className="text-xs text-gray-600">{value}</span>} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Grouped bar — Status by tenure bucket */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-0.5">Status by Tenure Group</h2>
+              <p className="text-xs text-gray-400 mb-2">{chartLabel} · Developed vs Not Developed</p>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={tenureGroups} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 12, border: "1px solid #e5e7eb" }} cursor={{ fill: "#f9fafb" }} />
+                    <Legend iconType="circle" iconSize={9}
+                      formatter={(v) => <span className="text-xs text-gray-600">{v}</span>} />
+                    <Bar dataKey="Developed"     fill={C_GREEN} radius={[5, 5, 0, 0]} />
+                    <Bar dataKey="Not Developed" fill={C_RED}   radius={[5, 5, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: NR Status + Suggested Action */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* NR Status bar */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-0.5">NR Status Breakdown</h2>
+              <p className="text-xs text-gray-400 mb-2">{chartLabel} · Net Revenue signal</p>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={nrBarData} margin={{ top: 16, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e5e7eb" }}
+                      formatter={(val) => [`${val} CSMs`, "Count"]} cursor={{ fill: "#f9fafb" }} />
+                    <Bar dataKey="count" radius={[5, 5, 0, 0]}>
+                      {nrBarData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                      <LabelList dataKey="count" position="top" style={{ fontSize: 12, fontWeight: 700, fill: "#6b7280" }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Suggested Action bar */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-0.5">Suggested Actions</h2>
+              <p className="text-xs text-gray-400 mb-2">{chartLabel} · recommended interventions</p>
+              <div className="h-52">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={actionBarData} margin={{ top: 16, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e5e7eb" }}
+                      formatter={(val) => [`${val} CSMs`, "Count"]} cursor={{ fill: "#f9fafb" }} />
+                    <Bar dataKey="count" radius={[5, 5, 0, 0]}>
+                      {actionBarData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                      <LabelList dataKey="count" position="top" style={{ fontSize: 12, fontWeight: 700, fill: "#6b7280" }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 3: Manager comparison — only when All Managers */}
+          {managerFilter === "All" && managerCompData.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-0.5">Manager-wise Performance</h2>
+              <p className="text-xs text-gray-400 mb-4">Developed vs Not Developed per reporting manager</p>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={managerCompData} margin={{ top: 10, right: 16, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, borderRadius: 12, border: "1px solid #e5e7eb" }}
+                      labelFormatter={(_, payload) => payload?.[0]?.payload?.fullName ?? ""}
+                      cursor={{ fill: "#f9fafb" }}
+                    />
+                    <Legend iconType="circle" iconSize={9}
+                      formatter={(v) => <span className="text-xs text-gray-600">{v}</span>} />
+                    <Bar dataKey="Developed"     fill={C_GREEN} radius={[5, 5, 0, 0]} />
+                    <Bar dataKey="Not Developed" fill={C_RED}   radius={[5, 5, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -218,7 +401,14 @@ export default function PerformancePage() {
             )}
           </div>
         </div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">CSM Performance Breakdown</h2>
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">
+          CSM Performance Breakdown
+          {managerFilter !== "All" && (
+            <span className="ml-2 text-xs font-normal text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full">
+              {managerFilter} · {chartRows.length} CSMs
+            </span>
+          )}
+        </h2>
         {rows ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
@@ -263,66 +453,6 @@ export default function PerformancePage() {
         )}
       </div>
 
-      {/* Charts — below the table */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Donut — Developed vs Not Developed */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-0.5">Development Distribution</h2>
-          <p className="text-xs text-gray-400 mb-2">Hover over a segment to explore</p>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  {...{ activeIndex: activeIdx }}
-                  activeShape={renderActiveShape as never}
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={88}
-                  dataKey="value"
-                  onMouseEnter={(_, index) => setActiveIdx(index)}
-                >
-                  {pieData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} stroke="white" strokeWidth={3} />
-                  ))}
-                </Pie>
-                <Legend
-                  iconType="circle"
-                  iconSize={10}
-                  formatter={(value) => <span className="text-xs text-gray-600">{value}</span>}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Grouped bar — Status by tenure bucket */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-0.5">Status by Tenure Group</h2>
-          <p className="text-xs text-gray-400 mb-2">Developed vs Not Developed across tenure buckets</p>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={tenureGroups} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 12, border: "1px solid #e5e7eb", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}
-                  cursor={{ fill: "#f9fafb" }}
-                />
-                <Legend
-                  iconType="circle"
-                  iconSize={9}
-                  formatter={(v) => <span className="text-xs text-gray-600">{v}</span>}
-                />
-                <Bar dataKey="Developed"     fill={C_GREEN} radius={[5, 5, 0, 0]} />
-                <Bar dataKey="Not Developed" fill={C_RED}   radius={[5, 5, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

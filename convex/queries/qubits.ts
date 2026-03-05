@@ -28,14 +28,21 @@ export const recent7Days = query({
   },
 });
 
+function isValidNJ(nj: { managerId: string; empId?: string | null }): boolean {
+  if (!nj.empId) return false;
+  if (nj.empId.startsWith("MOCK-")) return false;
+  if (nj.managerId.length >= 25 && !nj.managerId.includes(" ") && /^[a-z0-9]+$/.test(nj.managerId)) return false;
+  return true;
+}
+
 /** Per-NJ qubit summary — used for the Qubits page table and top stat cards */
 export const allSummary = query({
   args: {},
   handler: async (ctx) => {
-    const njs = await ctx.db
+    const njs = (await ctx.db
       .query("newJoiners")
       .withIndex("by_active", (q) => q.eq("isActive", true))
-      .collect();
+      .collect()).filter(isValidNJ);
     const allScores = await ctx.db.query("qubitScores").collect();
 
     return [...njs]

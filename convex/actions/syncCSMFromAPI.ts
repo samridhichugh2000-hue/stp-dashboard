@@ -139,6 +139,8 @@ function parseCSMRecord(raw: Record<string, unknown>): CSMRecord | null {
 
   const name = String(raw.Name ?? raw.EmployeeName ?? raw.name ?? "").trim();
   const managerName = String(raw.ReportingManager ?? raw.ManagerName ?? raw.Manager ?? raw.managerName ?? "").trim();
+  // Reject if manager name is a Convex document ID (garbage data)
+  if (managerName.length >= 25 && !/\s/.test(managerName) && /^[a-zA-Z0-9]+$/.test(managerName)) return null;
   const location = String(raw.BaseLocation ?? raw.Location ?? raw.City ?? raw.location ?? "").trim();
   const email = String(raw.Email ?? raw.EmailId ?? raw.EmailAddress ?? raw.WorkEmail ?? raw.email ?? "").trim();
 

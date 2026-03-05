@@ -1,12 +1,19 @@
 import { query } from "../_generated/server";
 
+function isValidNJ(nj: { managerId: string; empId?: string | null }): boolean {
+  if (!nj.empId) return false;
+  if (nj.empId.startsWith("MOCK-")) return false;
+  if (nj.managerId.length >= 25 && !nj.managerId.includes(" ") && /^[a-z0-9]+$/.test(nj.managerId)) return false;
+  return true;
+}
+
 export const njPerformanceStatus = query({
   args: {},
   handler: async (ctx) => {
-    const njs = await ctx.db
+    const njs = (await ctx.db
       .query("newJoiners")
       .withIndex("by_active", (q) => q.eq("isActive", true))
-      .collect();
+      .collect()).filter(isValidNJ);
     const allNR = await ctx.db.query("nrRecords").collect();
 
     return [...njs]
@@ -67,7 +74,8 @@ export const njPerformanceStatus = query({
 export const dashboardSummary = query({
   args: {},
   handler: async (ctx) => {
-    const njs = await ctx.db.query("newJoiners").filter((q) => q.eq(q.field("isActive"), true)).collect();
+    const njs = (await ctx.db.query("newJoiners").filter((q) => q.eq(q.field("isActive"), true)).collect())
+      .filter(isValidNJ);
     const allAlerts = await ctx.db.query("performanceAlerts").collect();
     const pendingAlerts = allAlerts.filter((a) => !a.acknowledgedAt);
     const allLeads = await ctx.db.query("leads").collect();
@@ -98,7 +106,8 @@ export const dashboardSummary = query({
 export const categoryTable = query({
   args: {},
   handler: async (ctx) => {
-    const njs = await ctx.db.query("newJoiners").filter((q) => q.eq(q.field("isActive"), true)).collect();
+    const njs = (await ctx.db.query("newJoiners").filter((q) => q.eq(q.field("isActive"), true)).collect())
+      .filter(isValidNJ);
 
     const categories = ["Developed", "Performer", "Performance Falling", "Non-Performer", "Uncategorised"];
     return categories.map((cat) => ({

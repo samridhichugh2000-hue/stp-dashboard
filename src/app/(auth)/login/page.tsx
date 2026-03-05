@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [loading,  setLoading]  = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) router.replace("/dashboard/overview");
+    if (isAuthenticated) router.replace("/dashboard/target");
   }, [isAuthenticated, router]);
 
   async function handleLogin(e: React.FormEvent) {

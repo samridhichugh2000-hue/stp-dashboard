@@ -4,6 +4,10 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Doc, Id } from "@/../convex/_generated/dataModel";
+import {
+  PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList,
+} from "recharts";
 const TODAY = new Date().toISOString().split("T")[0];
 import { HuddleLog } from "@/components/panels/overview/HuddleLog";
 import { DayTaskTracker, HuddleStatus } from "@/components/panels/overview/DayTaskTracker";
@@ -22,7 +26,8 @@ type DisplayCategory = "Developed" | "Not Developed" | "STP WIP" | "Inactive";
 function getDisplayCategory(nj: Doc<"newJoiners">): DisplayCategory {
   if (!nj.isActive) return "Inactive";
   const daysSinceJoining = (Date.now() - new Date(nj.joinDate).getTime()) / 86_400_000;
-  if (daysSinceJoining < 30) return "STP WIP";
+  // Uncategorised means not yet evaluated — keep in STP WIP regardless of tenure
+  if (daysSinceJoining < 30 || nj.category === "Uncategorised") return "STP WIP";
   if (nj.category === "Developed") return "Developed";
   return "Not Developed";
 }
@@ -89,8 +94,18 @@ export default function OverviewPage() {
     );
   }
 
+  // Filter out garbage records: Convex IDs as manager names, mock empIds, empty names
+  const isGarbage = (nj: Doc<"newJoiners">) => {
+    if (!nj.name?.trim()) return true;
+    if (!nj.empId) return true;
+    if (nj.empId.startsWith("MOCK-")) return true;
+    const mid = nj.managerId ?? "";
+    if (mid.length >= 25 && !/\s/.test(mid) && /^[a-zA-Z0-9]+$/.test(mid)) return true;
+    return false;
+  };
+
   // Sort: latest join date first; active before inactive at the same date
-  const allNJs = [...njs].sort((a: Doc<"newJoiners">, b: Doc<"newJoiners">) => {
+  const allNJs = [...njs].filter((n: Doc<"newJoiners">) => !isGarbage(n)).sort((a: Doc<"newJoiners">, b: Doc<"newJoiners">) => {
     const d = b.joinDate.localeCompare(a.joinDate);
     if (d !== 0) return d;
     return (b.isActive ? 1 : 0) - (a.isActive ? 1 : 0);
@@ -131,6 +146,46 @@ export default function OverviewPage() {
     return matchesSearch && matchesCategory && matchesManager;
   });
 
+  // ── Chart data (reacts to both categoryFilter and managerFilter) ──────────
+  const showCharts = categoryFilter !== "All" || managerFilter !== "All";
+
+  // Category breakdown of the currently visible NJs (for manager view or "All" view)
+  const chartBase = managerFilter !== "All"
+    ? allNJs.filter((n: Doc<"newJoiners">) => n.managerId === managerFilter)
+    : allNJs;
+
+  const catPieData = [
+    { name: "Developed",     value: chartBase.filter((n: Doc<"newJoiners">) => getDisplayCategory(n) === "Developed").length,     color: "#10b981" },
+    { name: "Not Developed", value: chartBase.filter((n: Doc<"newJoiners">) => getDisplayCategory(n) === "Not Developed").length, color: "#ef4444" },
+    { name: "STP WIP",       value: chartBase.filter((n: Doc<"newJoiners">) => getDisplayCategory(n) === "STP WIP").length,       color: "#8b5cf6" },
+    { name: "Inactive",      value: chartBase.filter((n: Doc<"newJoiners">) => !n.isActive).length,                               color: "#9ca3af" },
+  ].filter(d => d.value > 0);
+
+  // Tenure bucket breakdown of filteredNJs (responds to category + manager filter)
+  const tenureBuckets = [
+    { name: "< 1 mo",  min: 0,  max: 1  },
+    { name: "1–3 mo",  min: 1,  max: 3  },
+    { name: "3–6 mo",  min: 3,  max: 6  },
+    { name: "6–12 mo", min: 6,  max: 12 },
+    { name: "> 12 mo", min: 12, max: Infinity },
+  ];
+  const tenureBarData = tenureBuckets.map(b => {
+    const count = filteredNJs.filter((n: Doc<"newJoiners">) => {
+      const months = (Date.now() - new Date(n.joinDate).getTime()) / (1000 * 60 * 60 * 24 * 30.5);
+      return months >= b.min && months < b.max;
+    }).length;
+    return { name: b.name, count };
+  }).filter(b => b.count > 0);
+
+  // Phase breakdown of filteredNJs
+  const phaseColors: Record<string, string> = {
+    Orientation: "#a5b4fc", Training: "#6ee7b7", Field: "#fcd34d", Graduated: "#fb923c",
+  };
+  const phaseBarData = ["Orientation", "Training", "Field", "Graduated"].map(phase => ({
+    name: phase,
+    count: filteredNJs.filter((n: Doc<"newJoiners">) => n.currentPhase === phase).length,
+  })).filter(d => d.count > 0);
+
   const selectedNJ = selectedNJId
     ? allNJs.find((n: Doc<"newJoiners">) => n._id === selectedNJId) ?? null
     : null;
@@ -161,14 +216,12 @@ export default function OverviewPage() {
       </div>
 
       {/* ── KPI Summary Strip ────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 stagger">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 stagger">
         {([
           { label: "Active CSMs",   value: activeCount,  sub: "in program",                      bg: "from-indigo-500 to-violet-600",    cat: "All"           },
           { label: "Developed",     value: devCount,     sub: `${devRate}% success rate`,         bg: "from-emerald-500 to-teal-600",     cat: "Developed"     },
           { label: "Not Developed", value: notDevCount,  sub: "need support",                     bg: "from-red-500 to-rose-600",         cat: "Not Developed" },
-          { label: "STP WIP",       value: wipCount,     sub: "in training",                      bg: "from-violet-500 to-purple-600",    cat: "STP WIP"       },
-          { label: "Alerts",        value: alertCount,   sub: alertCount > 0 ? "need attention" : "all clear",
-            bg: alertCount > 0 ? "from-amber-500 to-orange-600" : "from-slate-400 to-slate-500", cat: "All"           },
+          { label: "STP WIP",       value: wipCount,     sub: "in training / pending eval",       bg: "from-violet-500 to-purple-600",    cat: "STP WIP"       },
         ] as { label: string; value: number; sub: string; bg: string; cat: DisplayCategory | "All" }[]).map((kpi) => (
           <button
             key={kpi.label}
@@ -181,6 +234,88 @@ export default function OverviewPage() {
           </button>
         ))}
       </div>
+
+      {/* ── Charts Panel (shown on category click or manager filter) ─────────── */}
+      {showCharts && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-fade-in">
+
+          {/* Donut — category breakdown of current scope */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">
+              {managerFilter !== "All" ? `${managerFilter} — Category Split` : `${categoryFilter} — Overview`}
+            </h3>
+            <p className="text-[11px] text-gray-400 mb-3">Distribution across all statuses</p>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={catPieData} cx="50%" cy="50%" innerRadius={48} outerRadius={76} dataKey="value" paddingAngle={3}>
+                    {catPieData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} stroke="white" strokeWidth={2} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e5e7eb" }}
+                    formatter={(val, name) => [`${val} CSMs`, name]}
+                  />
+                  <Legend iconType="circle" iconSize={9} formatter={(v) => <span className="text-xs text-gray-600">{v}</span>} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Bar — tenure distribution of filtered NJs */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Tenure Distribution</h3>
+            <p className="text-[11px] text-gray-400 mb-3">
+              {filteredNJs.length} CSM{filteredNJs.length !== 1 ? "s" : ""} in current view
+            </p>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={tenureBarData} margin={{ top: 16, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e5e7eb" }}
+                    formatter={(val) => [`${val} CSMs`, "Count"]}
+                    cursor={{ fill: "#f9fafb" }}
+                  />
+                  <Bar dataKey="count" fill="#a5b4fc" radius={[5, 5, 0, 0]}>
+                    <LabelList dataKey="count" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "#6b7280" }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Bar — phase breakdown of filtered NJs */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Phase Breakdown</h3>
+            <p className="text-[11px] text-gray-400 mb-3">Current training phase distribution</p>
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={phaseBarData} margin={{ top: 16, right: 8, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid #e5e7eb" }}
+                    formatter={(val) => [`${val} CSMs`, "Count"]}
+                    cursor={{ fill: "#f9fafb" }}
+                  />
+                  <Bar dataKey="count" radius={[5, 5, 0, 0]}>
+                    {phaseBarData.map((entry, i) => (
+                      <Cell key={i} fill={phaseColors[entry.name] ?? "#a5b4fc"} />
+                    ))}
+                    <LabelList dataKey="count" position="top" style={{ fontSize: 11, fontWeight: 700, fill: "#6b7280" }} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+        </div>
+      )}
 
       {/* ── Table + Detail Panel ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

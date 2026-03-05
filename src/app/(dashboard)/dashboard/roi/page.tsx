@@ -254,7 +254,10 @@ export default function ROIPage() {
   const [activeIdx,    setActiveIdx]    = useState(0);
 
   // ── Manager filter ────────────────────────────────────────────────────────
-  const managerList = [...new Set((njs ?? []).map((n: Doc<"newJoiners">) => n.managerId).filter(Boolean))].sort() as string[];
+  const isGarbageId = (id: string) => id.length >= 25 && !/\s/.test(id) && /^[a-zA-Z0-9]+$/.test(id);
+  const managerList = [...new Set((njs ?? []).map((n: Doc<"newJoiners">) => n.managerId).filter(
+    (m): m is string => Boolean(m) && !isGarbageId(m)
+  ))].sort();
   const visibleNjs = managerFilter === "All" ? (njs ?? []) : (njs ?? []).filter((n: Doc<"newJoiners">) => n.managerId === managerFilter);
 
   // ── NJ name sets ──────────────────────────────────────────────────────────

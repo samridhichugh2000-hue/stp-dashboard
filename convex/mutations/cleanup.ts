@@ -1,5 +1,32 @@
-import { internalMutation } from "../_generated/server";
+import { internalMutation, mutation } from "../_generated/server";
 import { v } from "convex/values";
+
+function isGarbageManagerId(managerId: string): boolean {
+  // Convex doc IDs: 25+ chars, no spaces, only a-z and 0-9
+  return managerId.length >= 25 && !/\s/.test(managerId) && /^[a-zA-Z0-9]+$/.test(managerId);
+}
+
+/**
+ * Immediately deactivates all NJs whose managerId is a garbage Convex document ID
+ * or whose empId is a mock ID. Call this from the Convex dashboard to clean up now.
+ */
+export const deactivateGarbageNJs = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const all = await ctx.db.query("newJoiners").collect();
+    let count = 0;
+    for (const nj of all) {
+      const isGarbage =
+        isGarbageManagerId(nj.managerId) ||
+        (nj.empId != null && nj.empId.startsWith("MOCK-"));
+      if (isGarbage && nj.isActive) {
+        await ctx.db.patch(nj._id, { isActive: false });
+        count++;
+      }
+    }
+    return { deactivated: count };
+  },
+});
 
 /**
  * Deletes a single NJ and ALL records linked to them across every table.

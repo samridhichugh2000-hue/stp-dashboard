@@ -120,7 +120,8 @@ export const deactivateNJsExcept = internalMutation({
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .collect();
     for (const nj of allActive) {
-      if (nj.empId && !empIdSet.has(nj.empId)) {
+      // Deactivate if no empId (can't match to API) OR empId absent from latest API response
+      if (!nj.empId || !empIdSet.has(nj.empId)) {
         await ctx.db.patch(nj._id, { isActive: false });
       }
     }
