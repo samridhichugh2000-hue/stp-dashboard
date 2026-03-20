@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { dsrSubmissions, newJoiners } from "@/lib/schema";
@@ -50,7 +50,7 @@ function todayIso(): string {
 async function fetchTodayDSREmails(token: string): Promise<GraphMessage[]> {
   const today = todayIso();
   // KQL: subject keyword + received today
-  const search = encodeURIComponent(`subject:"${SUBJECT_SEARCH}" received:${today}`);
+  const search = encodeURIComponent(`subject:${SUBJECT_SEARCH} received:${today}`);
   const url =
     `https://graph.microsoft.com/v1.0/users/${MAILBOX}/messages` +
     `?$search="${search}"&$select=id,subject,receivedDateTime,from&$top=100`;
@@ -74,10 +74,21 @@ async function fetchTodayDSREmails(token: string): Promise<GraphMessage[]> {
 }
 
 // ── GET — sync today's DSRs, return all STP WIP NJs with today's DSR status ──
+// ?njId=X  →  return full submission history for that NJ (no sync)
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const njId = req.nextUrl.searchParams.get("njId");
+  if (njId) {
+    const submissions = await db
+      .select({ date: dsrSubmissions.date, submittedAt: dsrSubmissions.submittedAt })
+      .from(dsrSubmissions)
+      .where(eq(dsrSubmissions.njId, parseInt(njId)))
+      .all();
+    return NextResponse.json(submissions);
+  }
 
   if (!CLIENT_SECRET || !MAILBOX) {
     return NextResponse.json({ error: "OUTLOOK_CLIENT_SECRET / OUTLOOK_MAILBOX not set" }, { status: 500 });

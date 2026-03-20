@@ -5,8 +5,9 @@ import { clsx } from "clsx";
 export type HuddleStatus = "done" | "missed" | "pending";
 
 interface DayTaskTrackerProps {
-  huddleStatus?: HuddleStatus; // undefined = NJ not in 15-working-day window; task hidden
-  dsrStatus?: HuddleStatus;    // undefined = not STP WIP; "done" = email received today
+  huddleStatus?: HuddleStatus;
+  dsrStatus?: HuddleStatus;
+  onDsrClick?: () => void;
 }
 
 interface Task {
@@ -16,7 +17,7 @@ interface Task {
   required: boolean;
 }
 
-export function DayTaskTracker({ huddleStatus, dsrStatus }: DayTaskTrackerProps) {
+export function DayTaskTracker({ huddleStatus, dsrStatus, onDsrClick }: DayTaskTrackerProps) {
   const tasks: Task[] = [
     ...(huddleStatus !== undefined
       ? [{ id: "huddle", label: "Huddle with HR", status: huddleStatus, required: true }]
@@ -46,7 +47,11 @@ export function DayTaskTracker({ huddleStatus, dsrStatus }: DayTaskTrackerProps)
 
       <div className="space-y-1.5">
         {tasks.map((task) => (
-          <div key={task.id} className="flex items-center gap-2 text-sm">
+          <div
+            key={task.id}
+            onClick={task.id === "dsr" && onDsrClick ? onDsrClick : undefined}
+            className={clsx("flex items-center gap-2 text-sm", task.id === "dsr" && onDsrClick && "cursor-pointer hover:bg-gray-50 rounded-lg px-1 -mx-1 transition-colors")}
+          >
             {/* Status box: ✓ green, ✗ red, ○ empty */}
             <div
               className={clsx(

@@ -115,41 +115,60 @@ function extractField(text: string, labels: string[]): string {
 
 /**
  * Parse one or more joining records from an email body.
- * Tries to split on numbered entries (1. / 2.) or double-newlines if multiple.
+ * Handles the table format used by Mokshi.Puri:
+ *   1
+ *   Diana (Jasmeet)
+ *   Nigeria
+ *   16th March 2026
+ *   ...
  */
 function parseJoinings(rawBody: string, contentType: string): ParsedJoining[] {
   const text = contentType === "html" ? stripHtml(rawBody) : rawBody;
 
-  // Split into candidate blocks: numbered list (1. Name: ...) or paragraph-separated
-  const blocks: string[] = [];
+  // Only parse the top (latest) reply — stop at the quoted chain "From: ..."
+  const chainIdx = text.search(/\n\s*From:\s+\w/i);
+  const topText = chainIdx > 0 ? text.slice(0, chainIdx) : text;
 
-  // Try numbered split: look for "1." / "2." etc. pattern
-  const numberedSplit = text.split(/\n\s*\d+\.\s+/);
-  if (numberedSplit.length > 1) {
-    blocks.push(...numberedSplit.filter((b) => b.trim().length > 20));
-  } else {
-    // Fall back: treat the whole body as one block
-    blocks.push(text);
-  }
+  const lines = topText.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
 
   const results: ParsedJoining[] = [];
 
-  for (const block of blocks) {
-    const name = extractField(block, ["Candidate Name", "Name", "Employee Name", "New Hire"]);
-    if (!name) continue; // skip blocks with no name
+  for (let i = 0; i < lines.length - 1; i++) {
+    // Row entry starts with a standalone number (1, 2, 3 ...)
+    if (!/^\d+$/.test(lines[i])) continue;
 
-    const manager = extractField(block, [
-      "Reporting Manager", "Manager", "TL", "Team Lead", "Supervisor",
-    ]);
-    const country = extractField(block, [
-      "Country", "Location", "Base Location", "City",
-    ]);
-    const tentativeDoj = extractField(block, [
-      "Tentative Date of Joining", "Tentative DOJ", "DOJ", "Date of Joining",
-      "Joining Date", "Start Date", "Expected Joining",
-    ]);
+    const nameLine   = lines[i + 1] ?? "";
+    const nextLine   = lines[i + 2] ?? "";
+    const afterNext  = lines[i + 3] ?? "";
 
-    results.push({ name, manager, country, tentativeDoj });
+    // Name line must start with a letter
+    if (!/^[A-Za-z]/.test(nameLine)) continue;
+    // Skip header-like values
+    if (/^(name|country|tentative|annual|target|no\.)/i.test(nameLine)) continue;
+
+    // Extract name and manager from "Diana (Jasmeet)" format
+    const nameMatch = nameLine.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+    const name    = nameMatch ? nameMatch[1].trim() : nameLine.trim();
+    const manager = nameMatch ? nameMatch[2].trim() : "";
+
+    if (!name || name.length < 2) continue;
+
+    // Skip garbage names (URLs, emails)
+    if (/[@.]com|http/i.test(name)) continue;
+
+    // Country: next line if it starts with a letter and isn't salary/currency
+    const isSalary = (s: string) => /USD|INR|EUR|GBP|lac|lacs/i.test(s) || /\b\d{5,}\b/.test(s);
+    const isCountry = (s: string) => /^[A-Za-z]/.test(s) && !isSalary(s);
+
+    const country      = isCountry(nextLine)  ? nextLine  : "";
+    const rawDoj       = country              ? afterNext : nextLine;
+    const tentativeDoj = isSalary(rawDoj)     ? ""        : rawDoj;
+
+    // Clean salary suffix from name e.g. "Danish – 1.7 lacs"
+    const cleanName = name.replace(/[\u2013\u2014\-]\s*[\d.,]+\s*(lacs?|k|usd|inr)?.*$/i, "").trim();
+    if (!cleanName || cleanName.length < 2) continue;
+
+    results.push({ name: cleanName, manager, country, tentativeDoj });
   }
 
   return results;

@@ -10,6 +10,7 @@ const TODAY = new Date().toISOString().split("T")[0];
 import { HuddleLog } from "@/components/panels/overview/HuddleLog";
 import { DayTaskTracker, HuddleStatus } from "@/components/panels/overview/DayTaskTracker";
 import { NJDetailModal } from "@/components/panels/overview/NJDetailModal";
+import { DSRHistoryModal } from "@/components/panels/overview/DSRHistoryModal";
 import { ExportButton } from "@/components/shared/ExportButton";
 import {
   Users, Search, X,
@@ -26,6 +27,33 @@ interface UpcomingJoining {
   tentativeDoj: string | null;
   status: string;           // pending | joined | backed_out
   emailReceivedAt: string | null;
+}
+
+const MONTHS: Record<string, number> = {
+  jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11,
+};
+function parseDoj(raw: string | null): Date | null {
+  if (!raw) return null;
+  const iso = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(+iso[1], +iso[2]-1, +iso[3]);
+  const wordy = raw.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3})\w*[\s,]*(\d{4})/i);
+  if (wordy) { const mo = MONTHS[wordy[2].toLowerCase().slice(0,3)]; if (mo!==undefined) return new Date(+wordy[3],mo,+wordy[1]); }
+  const short = raw.match(/(\d{1,2})[/-]([A-Za-z]{3})[/-](\d{2,4})/i);
+  if (short) { const mo = MONTHS[short[2].toLowerCase().slice(0,3)]; const yr = +short[3]<100?2000+ +short[3]: +short[3]; if (mo!==undefined) return new Date(yr,mo,+short[1]); }
+  return null;
+}
+
+function isUpcomingJoining(j: UpcomingJoining): boolean {
+  // Email must be recent (last 45 days)
+  if (!j.emailReceivedAt) return false;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 45);
+  if (new Date(j.emailReceivedAt) < cutoff) return false;
+  // DOJ must be today or future (if parseable)
+  const today = new Date(); today.setHours(0,0,0,0);
+  const doj = parseDoj(j.tentativeDoj);
+  if (doj !== null && doj < today) return false;
+  return true;
 }
 
 type DisplayCategory = "Developed" | "Not Developed" | "STP WIP" | "Inactive";
@@ -78,6 +106,7 @@ function initials(name: string) {
 export default function OverviewPage() {
   const [selectedNJId, setSelectedNJId]     = useState<number | null>(null);
   const [modalNJ, setModalNJ]               = useState<NJ | null>(null);
+  const [dsrHistoryNJ, setDsrHistoryNJ]     = useState<NJ | null>(null);
   const [search, setSearch]                 = useState("");
   const [categoryFilter, setCategoryFilter] = useState<FilterOption>("All");
   const [managerFilter, setManagerFilter]   = useState<string>("All");
@@ -317,7 +346,7 @@ export default function OverviewPage() {
           <div className="ml-auto flex items-center gap-2">
             {joinings !== null && (
               <span className="text-xs font-semibold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                {joinings.length}
+                {joinings.filter(isUpcomingJoining).length}
               </span>
             )}
             <button
@@ -348,8 +377,8 @@ export default function OverviewPage() {
           </div>
         )}
 
-        {/* Empty */}
-        {joinings && joinings.length === 0 && (
+        {/* Table */}
+        {joinings && joinings.filter(isUpcomingJoining).length === 0 && (
           <div className="flex flex-col items-center justify-center py-10 px-6 text-center">
             <div className="w-12 h-12 rounded-2xl bg-teal-50 flex items-center justify-center mb-3">
               <Calendar size={22} className="text-teal-400" />
@@ -357,9 +386,7 @@ export default function OverviewPage() {
             <p className="text-sm font-medium text-gray-500">No upcoming joinings found</p>
           </div>
         )}
-
-        {/* Table */}
-        {joinings && joinings.length > 0 && (
+        {joinings && joinings.filter(isUpcomingJoining).length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>
@@ -375,7 +402,7 @@ export default function OverviewPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {joinings.map((j, i) => {
+                {joinings.filter(isUpcomingJoining).map((j, i) => {
                   const ini = j.name.split(" ").map(w => w[0]).filter(Boolean).slice(0,2).join("").toUpperCase();
                   const receivedDate = j.emailReceivedAt
                     ? new Date(j.emailReceivedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
@@ -702,6 +729,7 @@ export default function OverviewPage() {
                     <DayTaskTracker
                       huddleStatus={isInHuddleWindow ? huddleStatus : undefined}
                       dsrStatus={dsrMap.has(selectedNJ.id) ? "done" : "pending"}
+                      onDsrClick={() => setDsrHistoryNJ(selectedNJ)}
                     />
                   </div>
                   <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
@@ -723,6 +751,14 @@ export default function OverviewPage() {
       </div>
 
       {modalNJ && <NJDetailModal nj={modalNJ} onClose={() => setModalNJ(null)} />}
+      {dsrHistoryNJ && (
+        <DSRHistoryModal
+          njId={dsrHistoryNJ.id}
+          njName={dsrHistoryNJ.name}
+          joinDate={dsrHistoryNJ.joinDate}
+          onClose={() => setDsrHistoryNJ(null)}
+        />
+      )}
     </div>
   );
 }
