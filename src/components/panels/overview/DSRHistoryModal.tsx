@@ -7,12 +7,13 @@ interface DSRHistoryModalProps {
   njId: number;
   njName: string;
   joinDate: string;
+  stpExtendedDays: number;
   onClose: () => void;
 }
 
-function getWorkingDays(from: string): string[] {
-  // Parse as local date (avoid UTC-to-local offset shifting the day)
-  const [y, m, day] = from.split("-").map(Number);
+// Returns working days between fromWorkingDay and toWorkingDay (1-indexed, Day 1 = first working day after DOJ)
+function getWorkingDays(doj: string, fromWorkingDay: number, toWorkingDay: number): string[] {
+  const [y, m, day] = doj.split("-").map(Number);
   const start = new Date(y, m - 1, day);
   start.setHours(0, 0, 0, 0);
   const today = new Date();
@@ -20,15 +21,20 @@ function getWorkingDays(from: string): string[] {
 
   const days: string[] = [];
   const d = new Date(start);
-  d.setDate(d.getDate() + 1); // exclude join date (day 1)
+  d.setDate(d.getDate() + 1); // start from day after join date
+  let workingDay = 0;
 
   while (d <= today) {
     const dow = d.getDay();
     if (dow !== 0 && dow !== 6) {
-      const yyyy = d.getFullYear();
-      const mm   = String(d.getMonth() + 1).padStart(2, "0");
-      const dd   = String(d.getDate()).padStart(2, "0");
-      days.push(`${yyyy}-${mm}-${dd}`);
+      workingDay++;
+      if (workingDay >= fromWorkingDay && workingDay <= toWorkingDay) {
+        const yyyy = d.getFullYear();
+        const mm   = String(d.getMonth() + 1).padStart(2, "0");
+        const dd   = String(d.getDate()).padStart(2, "0");
+        days.push(`${yyyy}-${mm}-${dd}`);
+      }
+      if (workingDay > toWorkingDay) break;
     }
     d.setDate(d.getDate() + 1);
   }
@@ -43,13 +49,14 @@ function fmtDate(iso: string) {
   });
 }
 
-export function DSRHistoryModal({ njId, njName, joinDate, onClose }: DSRHistoryModalProps) {
+export function DSRHistoryModal({ njId, njName, joinDate, stpExtendedDays, onClose }: DSRHistoryModalProps) {
   const [submittedDates, setSubmittedDates] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   const _now  = new Date();
   const today = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,"0")}-${String(_now.getDate()).padStart(2,"0")}`;
-  const workingDays = getWorkingDays(joinDate);
+  // DSR is tracked from Day 2 through Day 14 + any extension days (matches huddle window)
+  const workingDays = getWorkingDays(joinDate, 2, 14 + stpExtendedDays);
 
   useEffect(() => {
     fetch(`/api/outlook/dsr?njId=${njId}`)

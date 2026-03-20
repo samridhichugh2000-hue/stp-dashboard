@@ -7,6 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList,
 } from "recharts";
 const TODAY = new Date().toISOString().split("T")[0];
+const DOJ_CUTOFF = "2026-02-23"; // Huddle & DSR logs are only tracked from this date onwards
 import { HuddleLog } from "@/components/panels/overview/HuddleLog";
 import { DayTaskTracker, HuddleStatus } from "@/components/panels/overview/DayTaskTracker";
 import { NJDetailModal } from "@/components/panels/overview/NJDetailModal";
@@ -292,6 +293,8 @@ export default function OverviewPage() {
 
   const selectedNJWorkingDays = selectedNJ ? workingDaysSince(selectedNJ.joinDate) : 0;
   const isInHuddleWindow = selectedNJWorkingDays <= 18;
+  // Only show huddle/DSR logs for joiners from 23 Feb 2026 onwards
+  const showLogs = selectedNJ ? selectedNJ.joinDate >= DOJ_CUTOFF : false;
 
   const todayHuddle = huddleLogs?.find((l: HuddleLogType) => l.date === TODAY);
   const huddleStatus: HuddleStatus =
@@ -727,14 +730,16 @@ export default function OverviewPage() {
                 <>
                   <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
                     <DayTaskTracker
-                      huddleStatus={isInHuddleWindow ? huddleStatus : undefined}
-                      dsrStatus={dsrMap.has(selectedNJ.id) ? "done" : "pending"}
-                      onDsrClick={() => setDsrHistoryNJ(selectedNJ)}
+                      huddleStatus={showLogs && isInHuddleWindow ? huddleStatus : undefined}
+                      dsrStatus={showLogs ? (dsrMap.has(selectedNJ.id) ? "done" : "pending") : undefined}
+                      onDsrClick={showLogs ? () => setDsrHistoryNJ(selectedNJ) : undefined}
                     />
                   </div>
-                  <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-                    <HuddleLog njId={selectedNJId!} />
-                  </div>
+                  {showLogs && (
+                    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+                      <HuddleLog njId={selectedNJId!} />
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -756,6 +761,7 @@ export default function OverviewPage() {
           njId={dsrHistoryNJ.id}
           njName={dsrHistoryNJ.name}
           joinDate={dsrHistoryNJ.joinDate}
+          stpExtendedDays={dsrHistoryNJ.stpExtendedDays}
           onClose={() => setDsrHistoryNJ(null)}
         />
       )}
