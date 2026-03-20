@@ -31,33 +31,27 @@ export const evaluateMilestones = internalAction({
         });
       }
 
+      // Fetch last month NR once — reused for both PIP and EXIT checks
+      const lastMonthNR = tenureMonths >= 4
+        ? await ctx.runQuery(internal.queries.nr.lastMonthForNJ, { njId: nj._id })
+        : null;
+
       // PIP alert: >= 4 months AND last month NR negative
-      if (tenureMonths >= 4) {
-        const lastMonthNR = await ctx.runQuery(internal.queries.nr.lastMonthForNJ, { njId: nj._id });
-        if (lastMonthNR && !lastMonthNR.isPositive) {
-          await ctx.runMutation(internal.mutations.performanceAlerts.ensureAlert, {
-            njId: nj._id,
-            alertType: "PIP",
-            triggeredAt: new Date().toISOString(),
-          });
-        }
+      if (tenureMonths >= 4 && lastMonthNR && !lastMonthNR.isPositive) {
+        await ctx.runMutation(internal.mutations.performanceAlerts.ensureAlert, {
+          njId: nj._id,
+          alertType: "PIP",
+          triggeredAt: new Date().toISOString(),
+        });
       }
 
-      // EXIT alert: >= 5 months AND NR negative AND ROI negative
-      if (tenureMonths >= 5) {
-        const lastMonthNR = await ctx.runQuery(internal.queries.nr.lastMonthForNJ, { njId: nj._id });
-        const lastROI = await ctx.runQuery(internal.queries.roi.lastWeekForNJ, { njId: nj._id });
-
-        const nrNegative = lastMonthNR && !lastMonthNR.isPositive;
-        const roiNegative = lastROI && (lastROI.colorCode === "Red");
-
-        if (nrNegative && roiNegative) {
-          await ctx.runMutation(internal.mutations.performanceAlerts.ensureAlert, {
-            njId: nj._id,
-            alertType: "EXIT",
-            triggeredAt: new Date().toISOString(),
-          });
-        }
+      // EXIT alert: >= 5 months AND NR negative
+      if (tenureMonths >= 5 && lastMonthNR && !lastMonthNR.isPositive) {
+        await ctx.runMutation(internal.mutations.performanceAlerts.ensureAlert, {
+          njId: nj._id,
+          alertType: "EXIT",
+          triggeredAt: new Date().toISOString(),
+        });
       }
     }
   },

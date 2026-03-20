@@ -1,12 +1,11 @@
 "use client";
-import { useState } from "react";
-import { useQuery, useAction } from "convex/react";
-import { api } from "@/../convex/_generated/api";
+import { useState, useEffect } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine,
 } from "recharts";
 import { fmtTenure } from "@/lib/formatTenure";
+import type { NJ, RCBRow } from "@/lib/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -58,21 +57,9 @@ const CustomTooltip = ({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-type RCBRow = {
-  _id: string;
-  empId: string | null;
-  name: string;
-  designation?: string;
-  tenureMonths: number;
-  joinDate: string;
-  claimedCorporates: number;
-  nrFromCorporates: number;
-};
-
 export default function RCBPage() {
-  const rows = useQuery(api.queries.rcb.allCorpSummary) as RCBRow[] | undefined;
-  const njs  = useQuery(api.queries.newJoiners.list, {});
-  const fetchRCBForRange = useAction(api.actions.syncRCBFromAPI.getRCBForRange);
+  const [rows, setRows] = useState<RCBRow[] | null>(null);
+  const [njs, setNjs] = useState<NJ[] | null>(null);
 
   // ── Filters ────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
@@ -86,13 +73,22 @@ export default function RCBPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [activeRange, setActiveRange] = useState<{ start: string; end: string } | null>(null);
 
+  useEffect(() => {
+    fetch("/api/rcb?mode=summary")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setRows(data); });
+    fetch("/api/nj")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setNjs(data); });
+  }, []);
+
   if (!rows) return <div className="animate-pulse h-96 bg-white/60 rounded-2xl" />;
 
   const isGarbageId = (id: string) => id.length >= 25 && !/\s/.test(id) && /^[a-zA-Z0-9]+$/.test(id);
   const managerList = [...new Set((njs ?? []).map(n => n.managerId).filter(
     (m): m is string => Boolean(m) && !isGarbageId(m)
   ))].sort();
-  const njManagerMap = new Map((njs ?? []).map(n => [n._id as string, n.managerId]));
+  const njManagerMap = new Map((njs ?? []).map(n => [n.id, n.managerId]));
 
   // ── Merge custom data if a date-range fetch is active ─────────────────────
   const displayRows: RCBRow[] = rows.map((row) => {
@@ -102,10 +98,9 @@ export default function RCBPage() {
     return { ...row, claimedCorporates: hit.claimedCorporates, nrFromCorporates: hit.nrFromCorporates };
   });
 
-  // ── Sort: recent joiners first (shortest tenure first) ────────────────────
   const sorted = [...displayRows]
-    .filter(r => managerFilter === "All" || njManagerMap.get(r._id as string) === managerFilter)
-    .sort((a, b) => a.tenureMonths - b.tenureMonths);
+    .filter(r => managerFilter === "All" || njManagerMap.get(r.id) === managerFilter)
+    .sort((a, b) => b.joinDate.localeCompare(a.joinDate));
 
   // ── Search filter ──────────────────────────────────────────────────────────
   const q = search.trim().toLowerCase();
@@ -134,7 +129,13 @@ export default function RCBPage() {
     setIsFetching(true);
     setFetchError(null);
     try {
-      const result = await fetchRCBForRange({ startDate, endDate });
+      const res = await fetch("/api/rcb?mode=range", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate, endDate }),
+      });
+      if (!res.ok) throw new Error("Failed to fetch range data");
+      const result = await res.json();
       const map = new Map<string, { claimedCorporates: number; nrFromCorporates: number }>();
       for (const r of result) map.set(r.empId, { claimedCorporates: r.claimedCorporates, nrFromCorporates: r.nrFromCorporates });
       setCustomMap(map);
@@ -320,7 +321,7 @@ export default function RCBPage() {
                 </tr>
               ) : (
                 filtered.map((row, i) => (
-                  <tr key={row._id} className="hover:bg-indigo-50/30 transition-colors group">
+                  <tr key={row.id} className="hover:bg-indigo-50/30 transition-colors group">
                     <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
                     <td className="py-2.5 px-3">
                       <div className="flex items-center gap-2.5">

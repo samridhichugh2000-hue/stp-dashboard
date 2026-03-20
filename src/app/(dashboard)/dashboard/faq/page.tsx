@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/../convex/_generated/api";
-import { Id } from "@/../convex/_generated/dataModel";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import {
   FileText, HelpCircle, Plus, Trash2,
   ChevronDown, ChevronUp, X, Search, Pencil, Link, ExternalLink,
 } from "lucide-react";
+import type { Document, FAQ } from "@/lib/types";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -27,30 +26,13 @@ const CAT_ICON_COLORS: Record<string, string> = {
   "Other":         "from-slate-400 to-gray-500",
 };
 
-function fileIcon(type: string | undefined) {
-  const t = (type ?? "").toLowerCase();
-  if (t === "pdf")                      return "📄";
-  if (t === "docx" || t === "doc")      return "📝";
-  if (t === "xlsx" || t === "xls")      return "📊";
-  if (t === "pptx" || t === "ppt")      return "📋";
-  return "📎";
-}
-
-function fmtSize(bytes: number): string {
-  if (bytes < 1024)        return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
 // ─── Add Link Modal ───────────────────────────────────────────────────────────
 
-function AddLinkModal({ onClose }: { onClose: () => void }) {
-  const createDoc = useMutation(api.mutations.documents.create);
-
+function AddLinkModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [title,       setTitle]       = useState("");
   const [linkUrl,     setLinkUrl]     = useState("");
   const [category,    setCategory]    = useState(DOC_CATEGORIES[0]);
@@ -64,13 +46,20 @@ function AddLinkModal({ onClose }: { onClose: () => void }) {
     setSaving(true);
     setError(null);
     try {
-      await createDoc({
-        title: title.trim(),
-        category,
-        description: description.trim() || undefined,
-        linkUrl: linkUrl.trim(),
-        uploadedBy: "Admin",
+      const res = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create",
+          title: title.trim(),
+          category,
+          description: description.trim() || undefined,
+          linkUrl: linkUrl.trim(),
+          uploadedBy: "Admin",
+        }),
       });
+      if (!res.ok) throw new Error("Failed to save");
+      onAdded();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save");
@@ -136,13 +125,12 @@ function AddLinkModal({ onClose }: { onClose: () => void }) {
 function FAQModal({
   initial,
   onClose,
+  onSaved,
 }: {
-  initial?: { id: Id<"faqs">; question: string; answer: string; category?: string };
+  initial?: { id: number; question: string; answer: string; category?: string | null };
   onClose: () => void;
+  onSaved: () => void;
 }) {
-  const createFAQ = useMutation(api.mutations.faqs.create);
-  const updateFAQ = useMutation(api.mutations.faqs.update);
-
   const [question, setQuestion] = useState(initial?.question ?? "");
   const [answer,   setAnswer]   = useState(initial?.answer ?? "");
   const [category, setCategory] = useState(initial?.category ?? "General");
@@ -155,11 +143,18 @@ function FAQModal({
     if (!question.trim() || !answer.trim()) return;
     setSaving(true);
     try {
-      if (initial) {
-        await updateFAQ({ id: initial.id, question: question.trim(), answer: answer.trim(), category });
-      } else {
-        await createFAQ({ question: question.trim(), answer: answer.trim(), category });
-      }
+      await fetch("/api/faq", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: initial ? "update" : "create",
+          id: initial?.id,
+          question: question.trim(),
+          answer: answer.trim(),
+          category,
+        }),
+      });
+      onSaved();
       onClose();
     } finally {
       setSaving(false);
@@ -176,7 +171,7 @@ function FAQModal({
         <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
           <div>
             <label className="text-xs font-semibold text-gray-500 mb-1.5 block">Category</label>
-            <select value={category} onChange={e => setCategory(e.target.value)}
+            <select value={category ?? "General"} onChange={e => setCategory(e.target.value)}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-gray-50 cursor-pointer">
               {FAQ_CATS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -212,21 +207,55 @@ function FAQModal({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function FAQPage() {
+  const { data: session } = useSession();
   const [tab,          setTab]          = useState<"documents" | "faq">("documents");
   const [docCatFilter, setDocCatFilter] = useState("All");
   const [docSearch,    setDocSearch]    = useState("");
   const [faqSearch,    setFaqSearch]    = useState("");
-  const [openFAQ,      setOpenFAQ]      = useState<string | null>(null);
+  const [openFAQ,      setOpenFAQ]      = useState<number | null>(null);
   const [showAddLink,  setShowAddLink]  = useState(false);
   const [showFAQModal, setShowFAQModal] = useState(false);
-  const [editingFAQ,   setEditingFAQ]   = useState<{ id: Id<"faqs">; question: string; answer: string; category?: string } | null>(null);
+  const [editingFAQ,   setEditingFAQ]   = useState<{ id: number; question: string; answer: string; category?: string | null } | null>(null);
+  const [documents,    setDocuments]    = useState<Document[] | null>(null);
+  const [faqs,         setFaqs]         = useState<FAQ[] | null>(null);
 
-  const me        = useQuery(api.queries.users.me);
-  const isAdmin   = me?.role === "admin" || me?.role === "manager";
-  const documents = useQuery(api.queries.documents.list);
-  const faqs      = useQuery(api.queries.faqs.list);
-  const removeDoc = useMutation(api.mutations.documents.remove);
-  const removeFAQ = useMutation(api.mutations.faqs.remove);
+  const userRole = (session?.user as { role?: string })?.role;
+  const isAdmin = userRole === "admin" || userRole === "manager";
+
+  function loadDocuments() {
+    fetch("/api/documents")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setDocuments(data); });
+  }
+
+  function loadFaqs() {
+    fetch("/api/faq")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setFaqs(data); });
+  }
+
+  useEffect(() => {
+    loadDocuments();
+    loadFaqs();
+  }, []);
+
+  async function handleDeleteDoc(id: number) {
+    await fetch("/api/documents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", id }),
+    });
+    loadDocuments();
+  }
+
+  async function handleDeleteFAQ(id: number) {
+    await fetch("/api/faq", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", id }),
+    });
+    loadFaqs();
+  }
 
   // ── Document filtering ──────────────────────────────────────────────────────
   const filteredDocs = (documents ?? []).filter(d => {
@@ -337,8 +366,8 @@ export default function FAQPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredDocs.map(doc => (
-                <a key={doc._id}
-                  href={(doc.linkUrl ?? doc.url) || "#"}
+                <a key={doc.id}
+                  href={(doc.linkUrl) || "#"}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all p-5 flex flex-col gap-3 cursor-pointer group no-underline block">
@@ -369,7 +398,7 @@ export default function FAQPage() {
                       </span>
                       {isAdmin && (
                         <button
-                          onClick={e => { e.stopPropagation(); removeDoc({ id: doc._id as Id<"documents"> }); }}
+                          onClick={e => { e.preventDefault(); e.stopPropagation(); handleDeleteDoc(doc.id); }}
                           className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all">
                           <Trash2 size={13} />
                         </button>
@@ -413,11 +442,11 @@ export default function FAQPage() {
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 px-1">{cat}</p>
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
                     {items.map(faq => {
-                      const isOpen = openFAQ === faq._id;
+                      const isOpen = openFAQ === faq.id;
                       return (
-                        <div key={faq._id}>
+                        <div key={faq.id}>
                           <div
-                            onClick={() => setOpenFAQ(isOpen ? null : faq._id)}
+                            onClick={() => setOpenFAQ(isOpen ? null : faq.id)}
                             className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-gray-50/60 transition-colors group cursor-pointer"
                           >
                             <div className="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 transition-colors">
@@ -427,11 +456,11 @@ export default function FAQPage() {
                             <div className="flex items-center gap-2 flex-shrink-0">
                               {isAdmin && (
                                 <>
-                                  <button onClick={e => { e.stopPropagation(); setEditingFAQ({ id: faq._id as Id<"faqs">, question: faq.question, answer: faq.answer, category: faq.category }); }}
+                                  <button onClick={e => { e.stopPropagation(); setEditingFAQ({ id: faq.id, question: faq.question, answer: faq.answer, category: faq.category }); }}
                                     className="p-1.5 rounded-lg text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-all">
                                     <Pencil size={12} />
                                   </button>
-                                  <button onClick={e => { e.stopPropagation(); removeFAQ({ id: faq._id as Id<"faqs"> }); }}
+                                  <button onClick={e => { e.stopPropagation(); handleDeleteFAQ(faq.id); }}
                                     className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all">
                                     <Trash2 size={12} />
                                   </button>
@@ -459,11 +488,12 @@ export default function FAQPage() {
       )}
 
       {/* Modals */}
-      {showAddLink && <AddLinkModal onClose={() => setShowAddLink(false)} />}
+      {showAddLink && <AddLinkModal onClose={() => setShowAddLink(false)} onAdded={loadDocuments} />}
       {(showFAQModal || editingFAQ) && (
         <FAQModal
           initial={editingFAQ ?? undefined}
           onClose={() => { setShowFAQModal(false); setEditingFAQ(null); }}
+          onSaved={loadFaqs}
         />
       )}
     </div>

@@ -1,12 +1,12 @@
 "use client";
 
 import { clsx } from "clsx";
-import { Doc } from "@/../convex/_generated/dataModel";
 import { CheckCircle2, Circle, AlertCircle } from "lucide-react";
 import { fmtTenure } from "@/lib/formatTenure";
+import type { PerformanceAlert } from "@/lib/types";
 
 interface NJ {
-  _id: string;
+  id: number;
   name: string;
   joinDate: string;
   tenureMonths: number;
@@ -26,7 +26,7 @@ export function MilestoneTimeline({
   alerts,
 }: {
   nj: NJ;
-  alerts: Doc<"performanceAlerts">[];
+  alerts: PerformanceAlert[];
 }) {
   const progressPct = Math.min((nj.tenureMonths / 5) * 100, 100);
 
@@ -60,7 +60,7 @@ export function MilestoneTimeline({
             const isCurrent = nj.tenureMonths === m.month - 1;
             const alert = alerts.find(
               (a) =>
-                a.njId === nj._id &&
+                a.njId === nj.id &&
                 ((m.month === 3 && a.alertType === "PA") ||
                   (m.month === 4 && a.alertType === "PIP") ||
                   (m.month === 5 && a.alertType === "EXIT"))

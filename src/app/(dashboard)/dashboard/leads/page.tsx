@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAction, useQuery, useConvexAuth } from "convex/react";
-import { api } from "@/../convex/_generated/api";
-import { Doc } from "@/../convex/_generated/dataModel";
+import { useSession } from "next-auth/react";
+import type { NJ } from "@/lib/types";
 import { clsx } from "clsx";
 import { fmtTenure } from "@/lib/formatTenure";
 import {
@@ -221,9 +220,13 @@ function CSMChart({ row }: { row: FlatRow }) {
 
 // ── Main page ────────────────────────────────────────────────────
 export default function LeadsPage() {
-  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
-  const fetchROI = useAction(api.actions.koenigApi.getROIData);
-  const njs      = useQuery(api.queries.newJoiners.list, {});
+  const { status } = useSession();
+  const authLoading = status === "loading";
+  const isAuthenticated = status === "authenticated";
+  const [njs, setNjs] = useState<NJ[] | null>(null);
+  useEffect(() => {
+    fetch("/api/nj").then(r => r.json()).then(setNjs).catch(() => setNjs([]));
+  }, []);
 
   // Always default to last 30 days; cache only pre-populates the table while fresh data loads
   const [fromDate,   setFromDate]   = useState(thirtyDaysAgo);
@@ -251,7 +254,7 @@ export default function LeadsPage() {
 
   // Lookup: normalized name → { joinDate, tenureMonths, designation }
   const njMeta = new Map(
-    (njs ?? []).map((n: Doc<"newJoiners">) => [
+    (njs ?? []).map((n: NJ) => [
       normName(n.name),
       { joinDate: n.joinDate, tenureMonths: n.tenureMonths, designation: n.designation },
     ])
@@ -278,8 +281,8 @@ export default function LeadsPage() {
     (matchedRows ?? []).flatMap(r => normCCECandidates(r.cce))
   );
   const zeroRows: FlatRow[] = (njs ?? [])
-    .filter((n: Doc<"newJoiners">) => !matchedNormNames.has(normName(n.name)))
-    .map((n: Doc<"newJoiners">) => ({ cce: n.name, leads: 0, registration: null, roi: 0 }));
+    .filter((n: NJ) => !matchedNormNames.has(normName(n.name)))
+    .map((n: NJ) => ({ cce: n.name, leads: 0, registration: null, roi: 0 }));
 
   const rows = matchedRows ? [...matchedRows, ...zeroRows] : null;
 
@@ -304,11 +307,12 @@ export default function LeadsPage() {
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchROI({
-        from_date: toAPIDate(from),
-        to_date:   toAPIDate(to),
-        display_column: "CCE",
+      const res = await fetch("/api/roi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from_date: toAPIDate(from), to_date: toAPIDate(to), display_column: "CCE" }),
       });
+      const result = await res.json();
       if (result?.statuscode !== 200) {
         setError(result?.message ?? "API returned a non-200 status");
         setAllRows(null);
@@ -325,7 +329,7 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, [fetchROI]);
+  }, []);
 
   useEffect(() => {
     // Always fetch on mount — cache shows stale data while the fresh request loads

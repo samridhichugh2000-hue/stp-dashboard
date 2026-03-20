@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/../convex/_generated/api";
+import { useState, useEffect } from "react";
 import { clsx } from "clsx";
 import { fmtTenure } from "@/lib/formatTenure";
+import type { PerformanceRow, NJ } from "@/lib/types";
 
 type NRROIStatus = "Positive" | "Negative" | null;
 type DevFilter = "all" | "developed" | "not-developed" | "no-data";
@@ -46,14 +45,23 @@ export default function TargetPage() {
   const [search, setSearch] = useState("");
   const [devFilter, setDevFilter] = useState<DevFilter>("all");
 
-  const rows = useQuery(api.queries.performance.njPerformanceStatus);
-  const njs = useQuery(api.queries.newJoiners.list, {});
+  const [rows, setRows] = useState<PerformanceRow[] | null>(null);
+  const [njs, setNjs] = useState<NJ[] | null>(null);
 
-  const njManagerMap  = new Map((njs ?? []).map((n) => [n._id as string, n.managerId as string]));
-  const njJoinDateMap = new Map((njs ?? []).map((n) => [n._id as string, n.joinDate]));
+  useEffect(() => {
+    fetch("/api/performance")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setRows(data); });
+    fetch("/api/nj")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setNjs(data); });
+  }, []);
+
+  const njManagerMap  = new Map((njs ?? []).map((n) => [n.id, n.managerId]));
+  const njJoinDateMap = new Map((njs ?? []).map((n) => [n.id, n.joinDate]));
 
   const enriched = rows?.map((row) => {
-    const joinDate = njJoinDateMap.get(row._id as string) ?? (row as { joinDate?: string }).joinDate ?? "";
+    const joinDate = njJoinDateMap.get(row.id) ?? (row as { joinDate?: string }).joinDate ?? "";
     const markDate = joinDate ? new Date(joinDate) : null;
     if (markDate) markDate.setMonth(markDate.getMonth() + 4);
     const fourMonthMark = markDate
@@ -62,7 +70,7 @@ export default function TargetPage() {
     return {
       ...row,
       dev: computeDev(row.nrPositiveMonth, row.roiStatus, row.nrStatus),
-      manager: njManagerMap.get(row._id as string) ?? "—",
+      manager: njManagerMap.get(row.id) ?? "—",
       joinDate,
       fourMonthMark,
     };
@@ -103,7 +111,7 @@ const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
         ? r.dev === false
         : r.dev === null;
     return matchesManager && matchesSearch && matchesDev;
-  });
+  })?.sort((a, b) => b.joinDate.localeCompare(a.joinDate));
 
   const statCards = [
     {
@@ -365,7 +373,7 @@ const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
               <tbody className="divide-y divide-gray-50">
                 {filtered?.map((row, i) => (
                   <tr
-                    key={row._id}
+                    key={row.id}
                     className="hover:bg-gray-50/60 transition-colors group"
                   >
                     <td className="py-2.5 px-3 text-xs text-gray-300">

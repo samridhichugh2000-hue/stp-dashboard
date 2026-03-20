@@ -1,55 +1,34 @@
-import { query, internalQuery } from "../_generated/server";
-import { v } from "convex/values";
+import { query } from "../_generated/server";
 
 /**
  * Current ROI summary per CSM.
- * When live API data is present (roiRecords with fromDate/toDate), uses that.
- * Falls back to the summed nrRecords total otherwise.
+ * Reads summed NR values from nrRecords (live Koenig CCE NR API).
  */
 export const currentROISummary = query({
   args: {},
   handler: async (ctx) => {
     const nrRecords = await ctx.db.query("nrRecords").collect();
-    const roiRecords = await ctx.db.query("roiRecords").collect();
     const njs = await ctx.db
       .query("newJoiners")
       .withIndex("by_active", (q) => q.eq("isActive", true))
       .collect();
 
-    // Sum all monthly NR per NJ (fallback)
     const totals = new Map<string, number>();
     for (const r of nrRecords) {
       totals.set(r.njId, (totals.get(r.njId) ?? 0) + r.nrValue);
     }
 
-    // Latest ROI record per NJ (prefer live-API records that have fromDate)
-    const latestRoi = new Map<string, typeof roiRecords[0]>();
-    for (const r of roiRecords) {
-      const existing = latestRoi.get(r.njId);
-      if (!existing || r.weekStart > existing.weekStart) {
-        latestRoi.set(r.njId, r);
-      }
-    }
-
     return [...njs]
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map((nj) => {
-        const roi = latestRoi.get(nj._id);
-        const fallbackNR = totals.has(nj._id) ? totals.get(nj._id)! : null;
-        return {
-          _id: nj._id,
-          name: nj.name,
-          designation: nj.designation,
-          tenureMonths: nj.tenureMonths,
-          // Prefer live API roiValue when it carries monetary data (has fromDate)
-          totalNR: roi?.fromDate ? roi.roiValue : fallbackNR,
-          leads: roi?.leads ?? null,
-          registrations: roi?.registrations ?? null,
-          conversionRate: roi?.conversionRate ?? null,
-          fromDate: roi?.fromDate ?? null,
-          toDate: roi?.toDate ?? null,
-        };
-      });
+      .map((nj) => ({
+        _id: nj._id,
+        name: nj.name,
+        designation: nj.designation,
+        tenureMonths: nj.tenureMonths,
+        joinDate: nj.joinDate,
+        managerId: nj.managerId,
+        totalNR: totals.has(nj._id) ? totals.get(nj._id)! : null,
+      }));
   },
 });
 
@@ -73,71 +52,26 @@ export const monthlyStatusGrid = query({
     );
     const months = [...monthSet].sort();
 
-    // Sort NJs alphabetically
-    const sortedNJs = [...njs].sort((a, b) => a.name.localeCompare(b.name));
-
-    return { records: nrRecords, months, njs: sortedNJs };
-  },
-});
-
-export const byNJ = query({
-  args: { njId: v.id("newJoiners") },
-  handler: async (ctx, args) => {
-    const records = await ctx.db
-      .query("roiRecords")
-      .withIndex("by_nj", (q) => q.eq("njId", args.njId))
-      .collect();
-    return records.sort((a, b) => b.weekStart.localeCompare(a.weekStart));
-  },
-});
-
-export const byNJInternal = internalQuery({
-  args: { njId: v.id("newJoiners") },
-  handler: async (ctx, args) => {
-    return ctx.db
-      .query("roiRecords")
-      .withIndex("by_nj", (q) => q.eq("njId", args.njId))
-      .collect();
-  },
-});
-
-export const weeklyHeatmap = query({
-  args: {},
-  handler: async (ctx) => {
-    const all = await ctx.db.query("roiRecords").collect();
-    // Last 8 weeks
-    const weekStarts = [...new Set(all.map((r) => r.weekStart))].sort().slice(-8);
-    return { records: all, weekStarts };
-  },
-});
-
-export const consecutiveRedCount = query({
-  args: { njId: v.id("newJoiners") },
-  handler: async (ctx, args) => {
-    const records = await ctx.db
-      .query("roiRecords")
-      .withIndex("by_nj", (q) => q.eq("njId", args.njId))
-      .collect();
-
-    const sorted = records.sort((a, b) => b.weekStart.localeCompare(a.weekStart));
-    let count = 0;
-    for (const r of sorted) {
-      if (r.colorCode === "Red") count++;
-      else break;
+    // Pre-compute grid: { [njId]: { [monthKey]: nrValue } } — avoids sending raw records
+    const grid: Record<string, Record<string, number>> = {};
+    for (const r of nrRecords) {
+      const key = `${r.year}-${String(r.month).padStart(2, "0")}`;
+      if (!grid[r.njId]) grid[r.njId] = {};
+      grid[r.njId][key] = r.nrValue;
     }
-    return count;
+
+    // Sort NJs alphabetically, return only fields needed for display
+    const sortedNJs = [...njs]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((nj) => ({
+        _id: nj._id,
+        name: nj.name,
+        designation: nj.designation,
+        tenureMonths: nj.tenureMonths,
+        joinDate: nj.joinDate,
+      }));
+
+    return { grid, months, njs: sortedNJs };
   },
 });
 
-export const lastWeekForNJ = internalQuery({
-  args: { njId: v.id("newJoiners") },
-  handler: async (ctx, args) => {
-    const records = await ctx.db
-      .query("roiRecords")
-      .withIndex("by_nj", (q) => q.eq("njId", args.njId))
-      .collect();
-
-    if (records.length === 0) return null;
-    return records.sort((a, b) => b.weekStart.localeCompare(a.weekStart))[0];
-  },
-});

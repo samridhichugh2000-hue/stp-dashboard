@@ -3,7 +3,7 @@ import { Fragment, useRef, useEffect } from "react";
 import { clsx } from "clsx";
 import { fmtTenure } from "@/lib/formatTenure";
 import { NRInlineTrend } from "@/components/panels/nrd/NRInlineTrend";
-interface NRRecord { _id:string; njId:string; month:number; year:number; nrValue:number; isPositive:boolean; }
+interface NRRecord { id?: number; njId:string; month:number; year:number; nrValue:number; isPositive:boolean; }
 interface MonthlyNRGridProps {
   records: NRRecord[];
   months: string[];
@@ -75,10 +75,9 @@ export function MonthlyNRGrid({ records, months, njIds, njNames, njJoinDates, nj
       return (njNames[id] ?? "").toLowerCase().includes(filter.toLowerCase());
     })
     .sort((a, b) => {
-      const aHas = njsWithData.has(a);
-      const bHas = njsWithData.has(b);
-      if (aHas !== bHas) return aHas ? -1 : 1;
-      return (njNames[a] ?? "").localeCompare(njNames[b] ?? "");
+      const aDate = njJoinDates?.[a] ?? "";
+      const bDate = njJoinDates?.[b] ?? "";
+      return bDate.localeCompare(aDate); // latest join date first
     });
 
   const withDataCount = visibleIds.filter(id => njsWithData.has(id)).length;

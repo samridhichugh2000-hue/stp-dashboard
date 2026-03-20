@@ -1,35 +1,33 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { useConvexAuth } from "convex/react";
+import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
-import { api } from "@/../convex/_generated/api";
 import { AppShell } from "./AppShell";
+import type { UserRole } from "./Sidebar";
 
 const USER_ALLOWED_PATHS = ["/dashboard/faq"];
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
-  const me = useQuery(api.queries.users.me);
-  const router = useRouter();
+  const { data: session, status } = useSession();
+  const router   = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    if (authLoading) return;
-    if (!isAuthenticated) {
+    if (status === "loading") return;
+    if (status === "unauthenticated") {
       router.replace("/login");
       return;
     }
     // viewer role → redirect to FAQ if on any other route
-    if (me && me.role === "viewer") {
+    const role = (session?.user as { role?: string } | undefined)?.role;
+    if (role === "viewer") {
       const allowed = USER_ALLOWED_PATHS.some(p => pathname.startsWith(p));
       if (!allowed) router.replace("/dashboard/faq");
     }
-  }, [isAuthenticated, authLoading, me, pathname, router]);
+  }, [status, session, pathname, router]);
 
-  // Show nothing while auth resolves
-  if (authLoading || me === undefined) {
+  if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center"
         style={{ background: "linear-gradient(135deg, #f0f4ff 0%, #f8fafc 50%, #f5f3ff 100%)" }}>
@@ -41,10 +39,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isAuthenticated || !me) return null;
+  if (status === "unauthenticated" || !session?.user) return null;
+
+  const user = session.user as { name?: string | null; role?: string };
+  const userName = user.name ?? "User";
+  const userRole = (user.role ?? "viewer") as UserRole;
 
   return (
-    <AppShell userName={me.name} userRole={me.role}>
+    <AppShell userName={userName} userRole={userRole}>
       {children}
     </AppShell>
   );

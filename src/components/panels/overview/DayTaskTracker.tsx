@@ -6,6 +6,7 @@ export type HuddleStatus = "done" | "missed" | "pending";
 
 interface DayTaskTrackerProps {
   huddleStatus?: HuddleStatus; // undefined = NJ not in 15-working-day window; task hidden
+  dsrStatus?: HuddleStatus;    // undefined = not STP WIP; "done" = email received today
 }
 
 interface Task {
@@ -15,13 +16,13 @@ interface Task {
   required: boolean;
 }
 
-export function DayTaskTracker({ huddleStatus }: DayTaskTrackerProps) {
+export function DayTaskTracker({ huddleStatus, dsrStatus }: DayTaskTrackerProps) {
   const tasks: Task[] = [
     ...(huddleStatus !== undefined
       ? [{ id: "huddle", label: "Huddle with HR", status: huddleStatus, required: true }]
       : []),
-    { id: "qubits", label: "Qubits of the day completed", status: "pending", required: true },
-    { id: "dsr",    label: "DSR received",                status: "pending", required: true },
+    { id: "qubits", label: "Qubits of the day completed", status: "pending",          required: true },
+    { id: "dsr",    label: "DSR received",                status: dsrStatus ?? "pending", required: true },
   ];
 
   const doneCount  = tasks.filter((t) => t.status === "done").length;

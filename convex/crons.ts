@@ -12,13 +12,6 @@ crons.interval("syncLeads", { minutes: 30 }, internal.actions.syncLeads.syncLead
 // Sync NR from live API daily at 01:00 IST (UTC+5:30 → 19:30 UTC previous day)
 crons.daily("syncNR", { hourUTC: 19, minuteUTC: 30 }, internal.actions.syncNRFromAPI.syncNRFromAPI);
 
-// Sync ROI every Monday at 06:00 IST (00:30 UTC Monday)
-crons.weekly(
-  "syncROI",
-  { dayOfWeek: "monday", hourUTC: 0, minuteUTC: 30 },
-  internal.actions.syncROI.syncROI
-);
-
 // Evaluate milestones daily at 02:00 IST (20:30 UTC previous day)
 crons.daily(
   "evaluateMilestones",

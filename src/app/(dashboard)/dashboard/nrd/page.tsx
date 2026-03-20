@@ -1,36 +1,47 @@
 "use client";
-import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/../convex/_generated/api";
-import { Doc } from "@/../convex/_generated/dataModel";
+import { useState, useEffect } from "react";
+import type { NJ, MonthlyGridData, NRDStats } from "@/lib/types";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { MonthlyNRGrid } from "@/components/panels/nrd/MonthlyNRGrid";
 
 export default function NRDPage() {
-  const [selectedNjId, setSelectedNjId] = useState<string>("");
+  const [selectedNjId, setSelectedNjId] = useState<number | "">("");
   const [gridSearch, setGridSearch] = useState("");
   const [managerFilter, setManagerFilter] = useState("All");
 
-  const njs = useQuery(api.queries.newJoiners.list, {});
-  const grid = useQuery(api.queries.nr.monthlyGrid);
-  const stats = useQuery(api.queries.nr.nrdStats);
+  const [njs, setNjs] = useState<NJ[] | null>(null);
+  const [grid, setGrid] = useState<MonthlyGridData | null>(null);
+  const [stats, setStats] = useState<NRDStats | null>(null);
+
+  useEffect(() => {
+    fetch("/api/nj")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setNjs(data); });
+    fetch("/api/nr?q=monthlyGrid")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setGrid(data); });
+    fetch("/api/nr?q=stats")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setStats(data); });
+  }, []);
 
   const isGarbageId = (id: string) => id.length >= 25 && !/\s/.test(id) && /^[a-zA-Z0-9]+$/.test(id);
-  const validNjs = (njs ?? []).filter((n: Doc<"newJoiners">) => {
+  const validNjs = (njs ?? []).filter((n: NJ) => {
     if (!n.empId) return false;
     if (n.empId.startsWith("MOCK-")) return false;
     if (isGarbageId(n.managerId ?? "")) return false;
     return true;
   });
-  const managerList = [...new Set(validNjs.map((n: Doc<"newJoiners">) => n.managerId).filter(
+  const managerList = [...new Set(validNjs.map((n: NJ) => n.managerId).filter(
     (m): m is string => Boolean(m)
   ))].sort();
-  const filteredNjs = managerFilter === "All" ? validNjs : validNjs.filter((n: Doc<"newJoiners">) => n.managerId === managerFilter);
+  const filteredNjs = (managerFilter === "All" ? validNjs : validNjs.filter((n: NJ) => n.managerId === managerFilter))
+    .sort((a: NJ, b: NJ) => b.joinDate.localeCompare(a.joinDate));
 
-  const njNames = Object.fromEntries(validNjs.map((n: Doc<"newJoiners">) => [n._id, n.name]));
-  const njJoinDates = Object.fromEntries(validNjs.map((n: Doc<"newJoiners">) => [n._id, n.joinDate]));
-  const njTenures = Object.fromEntries(validNjs.map((n: Doc<"newJoiners">) => [n._id, n.tenureMonths]));
-  const njIds = filteredNjs.map((n: Doc<"newJoiners">) => n._id);
+  const njNames = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.name]));
+  const njJoinDates = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.joinDate]));
+  const njTenures = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.tenureMonths]));
+  const njIds = filteredNjs.map((n: NJ) => String(n.id));
 
   const statCards = [
     {
@@ -58,6 +69,9 @@ export default function NRDPage() {
       bg: "from-slate-600 to-gray-700",
     },
   ];
+
+  // Convert grid records njId (number) to string for MonthlyNRGrid
+  const gridRecords = (grid?.records ?? []).map(r => ({ ...r, njId: String(r.njId) }));
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -129,15 +143,15 @@ export default function NRDPage() {
         </div>
         {grid
           ? <MonthlyNRGrid
-              records={grid.records}
+              records={gridRecords}
               months={grid.months}
               njIds={njIds}
               njNames={njNames}
               njJoinDates={njJoinDates}
               njTenures={njTenures}
               filter={gridSearch}
-              selectedNjId={selectedNjId}
-              onSelect={(id) => setSelectedNjId(id)}
+              selectedNjId={selectedNjId ? String(selectedNjId) : ""}
+              onSelect={(id) => setSelectedNjId(id ? Number(id) : "")}
             />
           : <div className="animate-pulse h-48 bg-gray-50 rounded-xl" />}
       </div>

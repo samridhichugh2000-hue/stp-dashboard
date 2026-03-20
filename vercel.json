@@ -1,6 +1,25 @@
 {
   "buildCommand": "npm run build",
-  "env": {
-    "NEXT_PUBLIC_CONVEX_URL": "https://sensible-panda-662.convex.cloud"
-  }
+  "crons": [
+    {
+      "path": "/api/cron/sync-csm",
+      "schedule": "30 19 * * *"
+    },
+    {
+      "path": "/api/cron/sync-nr",
+      "schedule": "30 19 * * *"
+    },
+    {
+      "path": "/api/cron/sync-rcb",
+      "schedule": "30 20 * * *"
+    },
+    {
+      "path": "/api/cron/evaluate-milestones",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/sync-teams-huddles",
+      "schedule": "30 4 * * *"
+    }
+  ]
 }

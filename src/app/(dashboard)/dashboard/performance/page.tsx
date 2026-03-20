@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/../convex/_generated/api";
+import { useState, useEffect } from "react";
 import { clsx } from "clsx";
 import {
   PieChart, Pie, Cell, Legend, ResponsiveContainer, Sector,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LabelList,
 } from "recharts";
 import { fmtTenure } from "@/lib/formatTenure";
+import type { PerformanceRow, NJ } from "@/lib/types";
 
 type NRROIStatus = "Positive" | "Negative" | null;
 
@@ -96,19 +95,28 @@ export default function PerformancePage() {
   const [activeIdx, setActiveIdx] = useState(0);
   const [search, setSearch] = useState("");
   const [managerFilter, setManagerFilter] = useState("All");
-  const rows = useQuery(api.queries.performance.njPerformanceStatus);
-  const njs  = useQuery(api.queries.newJoiners.list, {});
+  const [rows, setRows] = useState<PerformanceRow[] | null>(null);
+  const [njs, setNjs] = useState<NJ[] | null>(null);
+
+  useEffect(() => {
+    fetch("/api/performance")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setRows(data); });
+    fetch("/api/nj")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setNjs(data); });
+  }, []);
 
   const isGarbageId = (id: string) =>
     id.length >= 25 && !/\s/.test(id) && /^[a-zA-Z0-9]+$/.test(id);
   const managerList = [...new Set((njs ?? []).map(n => n.managerId).filter(
     (m): m is string => Boolean(m) && !isGarbageId(m)
   ))].sort();
-  const njManagerMap = new Map((njs ?? []).map(n => [n._id as string, n.managerId]));
+  const njManagerMap = new Map((njs ?? []).map(n => [n.id, n.managerId]));
 
   // Only keep rows whose NJ ID exists in the filtered njs list (removes garbage records)
-  const validNJIds = new Set((njs ?? []).map(n => n._id as string));
-  const enriched = rows?.filter(row => validNJIds.size === 0 || validNJIds.has(row._id as string)).map(row => {
+  const validNJIds = new Set((njs ?? []).map(n => n.id));
+  const enriched = rows?.filter(row => validNJIds.size === 0 || validNJIds.has(row.id)).map(row => {
     // Use DB-stored category as source of truth (same as overview page)
     const dev = row.category === "Developed" ? true
               : row.category === "Uncategorised" ? null
@@ -124,7 +132,7 @@ export default function PerformancePage() {
   const filtered = enriched
     ?.filter(r => {
       const matchesSearch = !q || r.name.toLowerCase().includes(q);
-      const matchesManager = managerFilter === "All" || njManagerMap.get(r._id as string) === managerFilter;
+      const matchesManager = managerFilter === "All" || njManagerMap.get(r.id) === managerFilter;
       return matchesSearch && matchesManager;
     })
     .sort((a, b) => new Date(b.joinDate).getTime() - new Date(a.joinDate).getTime());
@@ -187,7 +195,7 @@ export default function PerformancePage() {
   // Bar — Manager comparison (only when All managers)
   const managerCompData = managerFilter === "All"
     ? managerList.map(mgr => {
-        const mRows = enriched?.filter(r => njManagerMap.get(r._id as string) === mgr) ?? [];
+        const mRows = enriched?.filter(r => njManagerMap.get(r.id) === mgr) ?? [];
         const mDev = mRows.filter(r => r.dev === true).length;
         const mTotal = mRows.filter(r => r.dev !== null).length;
         return {
@@ -425,7 +433,7 @@ export default function PerformancePage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filtered?.map((row, i) => (
-                  <tr key={row._id} className="hover:bg-gray-50/60 transition-colors group">
+                  <tr key={row.id} className="hover:bg-gray-50/60 transition-colors group">
                     <td className="py-2.5 px-3 text-xs text-gray-300">{i + 1}</td>
                     <td className="py-2.5 px-3">
                       <div className="flex items-center gap-2.5">

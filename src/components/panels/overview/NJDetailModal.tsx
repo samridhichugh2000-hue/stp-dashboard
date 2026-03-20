@@ -1,11 +1,10 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { api } from "@/../convex/_generated/api";
-import { Doc } from "@/../convex/_generated/dataModel";
+import { useState, useEffect } from "react";
 import { X, Hash, UserCircle2, MapPin, CalendarDays, Mail } from "lucide-react";
 import { clsx } from "clsx";
 import { fmtTenure } from "@/lib/formatTenure";
+import type { NJ, NRRecord } from "@/lib/types";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -28,12 +27,28 @@ function fmtINR(n: number): string {
 
 type DisplayCategory = "Developed" | "Not Developed" | "STP WIP" | "Inactive";
 
-function getDisplayCategory(nj: Doc<"newJoiners">): DisplayCategory {
+function workingDaysSince(dojISO: string): number {
+  const doj = new Date(dojISO);
+  doj.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  let count = 0;
+  const d = new Date(doj);
+  d.setDate(d.getDate() + 1);
+  while (d <= today) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
+function getDisplayCategory(nj: NJ): DisplayCategory {
   if (!nj.isActive) return "Inactive";
-  const daysSince = (Date.now() - new Date(nj.joinDate).getTime()) / 86_400_000;
-  if (daysSince < 30) return "STP WIP";
-  if (nj.category === "Developed") return "Developed";
-  return "Not Developed";
+  const wds = workingDaysSince(nj.joinDate);
+  if (wds <= 14) return "STP WIP";
+  if (wds <= 18) return "STP WIP"; // Still in extended monitoring range
+  return nj.hasPositiveNR ? "Developed" : "Not Developed";
 }
 
 function StatusPill({ cat }: { cat: DisplayCategory }) {
@@ -59,18 +74,23 @@ function MetricSkeleton() {
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  nj: Doc<"newJoiners">;
+  nj: NJ;
   onClose: () => void;
 }
 
 export function NJDetailModal({ nj, onClose }: Props) {
-  const njId     = nj._id;
+  const [nrRecords, setNrRecords] = useState<NRRecord[] | undefined>(undefined);
+
+  useEffect(() => {
+    fetch(`/api/nr?q=byNJ&njId=${nj.id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { setNrRecords(data ?? []); });
+  }, [nj.id]);
+
   const today    = new Date();
   const curMonth = today.getMonth() + 1;
   const curYear  = today.getFullYear();
 
-  // All NR records for this NJ — same DB source as ROI & Leads page
-  const nrRecords = useQuery(api.queries.nr.byNJ, { njId });
   const currentNR = nrRecords?.find(r => r.month === curMonth && r.year === curYear) ?? null;
 
   // Total ROI = sum of all monthly NR values (same as ROI & Leads page table)
@@ -122,9 +142,14 @@ export function NJDetailModal({ nj, onClose }: Props) {
         <div className="px-6 py-5 space-y-5">
 
           {/* Status */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-gray-400 font-medium">Status:</span>
             <StatusPill cat={displayCat} />
+            {nj.stpExtendedDays > 0 && (
+              <span className="inline-block text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-700">
+                STP extended by {nj.stpExtendedDays} day{nj.stpExtendedDays > 1 ? "s" : ""}
+              </span>
+            )}
           </div>
 
           {/* 2 metric cards */}
@@ -147,7 +172,7 @@ export function NJDetailModal({ nj, onClose }: Props) {
               ) : <p className="text-gray-300 text-2xl font-black">—</p>}
             </div>
 
-            {/* Current month NR — from Convex (CCE NR API sync) */}
+            {/* Current month NR */}
             <div className="bg-gray-50 rounded-xl p-5 text-center">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">
                 {today.toLocaleDateString("en-IN", { month: "short" })} NR

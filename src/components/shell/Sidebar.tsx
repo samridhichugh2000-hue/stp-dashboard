@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Zap,
   X,
+  GraduationCap,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -78,6 +79,13 @@ const navItems: NavItem[] = [
     icon: <Award size={17} />,
     roles: ["admin", "manager"],
     color: "from-rose-400 to-rose-600",
+  },
+  {
+    label: "Masterclasses",
+    href: "/dashboard/masterclass",
+    icon: <GraduationCap size={17} />,
+    roles: ["admin", "manager"],
+    color: "from-teal-400 to-emerald-600",
   },
   {
     label: "FAQ & Documents",

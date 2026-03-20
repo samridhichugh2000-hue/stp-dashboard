@@ -1,28 +1,32 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/../convex/_generated/api";
-import { Doc, Id } from "@/../convex/_generated/dataModel";
+import type { NJ } from "@/lib/types";
 
 interface NJFilterProps {
-  value: Id<"newJoiners"> | "all";
-  onChange: (value: Id<"newJoiners"> | "all") => void;
+  value: number | "all";
+  onChange: (value: number | "all") => void;
 }
 
 export function NJFilter({ value, onChange }: NJFilterProps) {
-  const njs = useQuery(api.queries.newJoiners.list, {});
+  const [njs, setNjs] = useState<NJ[] | null>(null);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    fetch("/api/nj")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setNjs(data); });
+  }, []);
+
   const selectedName =
     value === "all"
       ? "All NJs"
-      : (njs?.find((n: Doc<"newJoiners">) => n._id === value)?.name ?? "…");
+      : (njs?.find((n: NJ) => n.id === value)?.name ?? "…");
 
   const filtered =
-    njs?.filter((n: Doc<"newJoiners">) =>
+    njs?.filter((n: NJ) =>
       n.name.toLowerCase().includes(search.toLowerCase())
     ) ?? [];
 
@@ -37,7 +41,7 @@ export function NJFilter({ value, onChange }: NJFilterProps) {
     return () => document.removeEventListener("mousedown", handle);
   }, []);
 
-  function select(val: Id<"newJoiners"> | "all") {
+  function select(val: number | "all") {
     onChange(val);
     setOpen(false);
     setSearch("");
@@ -86,13 +90,13 @@ export function NJFilter({ value, onChange }: NJFilterProps) {
                 All NJs
               </button>
             )}
-            {filtered.map((nj: Doc<"newJoiners">) => (
+            {filtered.map((nj: NJ) => (
               <button
-                key={nj._id}
+                key={nj.id}
                 type="button"
-                onClick={() => select(nj._id)}
+                onClick={() => select(nj.id)}
                 className={`w-full text-left px-3 py-2 text-xs hover:bg-indigo-50 transition-colors ${
-                  value === nj._id ? "text-indigo-600 font-semibold bg-indigo-50/60" : "text-gray-700"
+                  value === nj.id ? "text-indigo-600 font-semibold bg-indigo-50/60" : "text-gray-700"
                 }`}
               >
                 {nj.name}

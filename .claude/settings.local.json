@@ -9,7 +9,17 @@
       "Bash(curl:*)",
       "Bash(node -e \":*)",
       "Bash(npx vercel:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(taskkill:*)",
+      "Bash(sleep:*)",
+      "Bash(cmd /c \"taskkill /F /IM node.exe\" 2>&1; sleep 2 && rm -rf C:/Users/ragha/stp-dashboard/.next && echo \"done\")",
+      "Bash(cat:*)",
+      "Bash(powershell -Command \"try { \\\\$r = Invoke-WebRequest -Uri 'http://localhost:3000/api/init-db' -Method POST -Headers @{'x-init-secret'='stp-init-2026'} -ContentType 'application/json' -TimeoutSec 15; Write-Host \\\\$r.StatusCode; Write-Host \\\\$r.Content } catch { Write-Host 'Error:' \\\\$_.Exception.Message; Write-Host 'Status:' \\\\$_.Exception.Response.StatusCode }\" 2>&1)",
+      "Bash(node:*)",
+      "Bash(npm run:*)",
+      "Bash(cmd /c \"taskkill /F /IM node.exe\" && echo \"killed\" && sleep 3 && npm run dev)",
+      "Bash(npx next:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

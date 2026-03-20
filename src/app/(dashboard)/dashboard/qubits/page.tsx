@@ -1,22 +1,32 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@/../convex/_generated/api";
-import { Id } from "@/../convex/_generated/dataModel";
+import { useState, useEffect } from "react";
 import { clsx } from "clsx";
 import { Search, X, CheckCircle2, Clock, TrendingUp, TrendingDown, ChevronRight } from "lucide-react";
+import type { NJ, QubitScore } from "@/lib/types";
+
+type QubitsNJRow = Pick<NJ, "id" | "name" | "designation" | "empId">;
 
 export default function QubitsPage() {
-  const [selectedNJId, setSelectedNJId] = useState<Id<"newJoiners"> | null>(null);
+  const [selectedNJId, setSelectedNJId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const summary = useQuery(api.queries.qubits.allSummary);
-  const scores = useQuery(
-    api.queries.qubits.byNJ,
-    selectedNJId ? { njId: selectedNJId } : "skip"
-  );
+  const [summary, setSummary] = useState<QubitsNJRow[] | null>(null);
+  const [scores, setScores] = useState<QubitScore[] | null>(null);
+
+  useEffect(() => {
+    fetch("/api/qubits?q=allSummary")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setSummary(data); });
+  }, []);
+
+  useEffect(() => {
+    if (selectedNJId === null) { setScores(null); return; }
+    fetch(`/api/qubits?njId=${selectedNJId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setScores(data); });
+  }, [selectedNJId]);
 
   if (!summary) {
     return (
@@ -35,7 +45,7 @@ export default function QubitsPage() {
     return idx < COMPLETED_COUNT ? "Completed" : "Pending";
   }
 
-  const selectedCSM      = selectedNJId ? summary.find((r) => r._id === selectedNJId) : null;
+  const selectedCSM      = selectedNJId ? summary.find((r) => r.id === selectedNJId) : null;
   const totalCompleted   = scores?.length ?? 0;
   const totalAbove50     = scores?.filter((s) => s.score >= 50).length ?? 0;
   const totalBelow50     = scores?.filter((s) => s.score < 50).length ?? 0;
@@ -44,7 +54,7 @@ export default function QubitsPage() {
     ? summary.filter((r) => r.name.toLowerCase().includes(searchQuery.toLowerCase()))
     : [];
 
-  function selectCSM(id: Id<"newJoiners">, name: string) {
+  function selectCSM(id: number, name: string) {
     setSelectedNJId(id);
     setSearchQuery(name);
     setDropdownOpen(false);
@@ -97,12 +107,12 @@ export default function QubitsPage() {
             {dropdownOpen && filtered.length > 0 && (
               <div className="absolute z-20 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
                 {filtered.slice(0, 8).map((r) => {
-                  const idx = summary.findIndex((s) => s._id === r._id);
+                  const idx = summary.findIndex((s) => s.id === r.id);
                   const status = qubitStatus(idx);
                   return (
                     <button
-                      key={r._id}
-                      onMouseDown={() => selectCSM(r._id, r.name)}
+                      key={r.id}
+                      onMouseDown={() => selectCSM(r.id, r.name)}
                       className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex items-center justify-between"
                     >
                       <span className="font-medium">{r.name}</span>
@@ -136,16 +146,16 @@ export default function QubitsPage() {
                   const status = qubitStatus(i);
                   return (
                     <tr
-                      key={row._id}
-                      onClick={() => selectCSM(row._id, row.name)}
+                      key={row.id}
+                      onClick={() => selectCSM(row.id, row.name)}
                       className={clsx(
                         "cursor-pointer transition-colors group",
-                        selectedNJId === row._id ? "bg-indigo-50" : "hover:bg-gray-50/60"
+                        selectedNJId === row.id ? "bg-indigo-50" : "hover:bg-gray-50/60"
                       )}
                     >
                       <td className="py-2.5 px-4 text-xs text-gray-300">{i + 1}</td>
                       <td className="py-2.5 px-4">
-                        <p className={clsx("text-xs font-semibold", selectedNJId === row._id ? "text-indigo-700" : "text-gray-800")}>{row.name}</p>
+                        <p className={clsx("text-xs font-semibold", selectedNJId === row.id ? "text-indigo-700" : "text-gray-800")}>{row.name}</p>
                         {row.designation && <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>}
                       </td>
                       <td className="py-2.5 px-4 text-xs text-gray-500">{row.empId ?? "—"}</td>
@@ -158,7 +168,7 @@ export default function QubitsPage() {
                         </span>
                       </td>
                       <td className="py-2.5 px-2 text-right">
-                        <ChevronRight size={14} className={clsx("transition-colors", selectedNJId === row._id ? "text-indigo-400" : "text-gray-200 group-hover:text-gray-400")} />
+                        <ChevronRight size={14} className={clsx("transition-colors", selectedNJId === row.id ? "text-indigo-400" : "text-gray-200 group-hover:text-gray-400")} />
                       </td>
                     </tr>
                   );

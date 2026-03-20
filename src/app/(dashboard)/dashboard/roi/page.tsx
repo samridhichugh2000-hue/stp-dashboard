@@ -1,9 +1,8 @@
 "use client";
 import { useState, useEffect, useCallback, Fragment } from "react";
-import { useQuery, useAction, useConvexAuth } from "convex/react";
-import { api } from "@/../convex/_generated/api";
-import { Doc } from "@/../convex/_generated/dataModel";
+import { useSession } from "next-auth/react";
 import { fmtTenure } from "@/lib/formatTenure";
+import type { ROISummaryRow } from "@/lib/types";
 import {
   PieChart, Pie, Cell, Legend, ResponsiveContainer, Sector,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LabelList,
@@ -232,10 +231,8 @@ function CSMChart({ row, dbRoi }: { row: FlatRow; dbRoi: number | null }) {
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function ROIPage() {
-  const { isAuthenticated, isLoading: authLoading } = useConvexAuth();
-  const fetchROI  = useAction(api.actions.koenigApi.getROIData);
-  const njs        = useQuery(api.queries.newJoiners.list, {});
-  const defaultRows = useQuery(api.queries.roi.currentROISummary);
+  const { status: authStatus } = useSession();
+  const [defaultRows, setDefaultRows] = useState<ROISummaryRow[] | undefined>(undefined);
 
   const [fromInput,     setFromInput]     = useState(thirtyDaysAgo);
   const [toInput,       setToInput]       = useState(todayIso);
@@ -247,6 +244,13 @@ export default function ROIPage() {
     const cached = readROICache();
     if (cached) setAllRows(cached.rows);
   }, []);
+
+  // Fetch DB summary rows
+  useEffect(() => {
+    fetch("/api/roi")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setDefaultRows(data); });
+  }, []);
   const [isLoading,   setIsLoading]   = useState(false);
   const [error,       setError]       = useState<string | null>(null);
   const [nameSearch,   setNameSearch]   = useState("");
@@ -255,26 +259,37 @@ export default function ROIPage() {
 
   // ── Manager filter ────────────────────────────────────────────────────────
   const isGarbageId = (id: string) => id.length >= 25 && !/\s/.test(id) && /^[a-zA-Z0-9]+$/.test(id);
-  const managerList = [...new Set((njs ?? []).map((n: Doc<"newJoiners">) => n.managerId).filter(
+  const managerList = [...new Set((defaultRows ?? []).map(n => n.managerId).filter(
     (m): m is string => Boolean(m) && !isGarbageId(m)
   ))].sort();
-  const visibleNjs = managerFilter === "All" ? (njs ?? []) : (njs ?? []).filter((n: Doc<"newJoiners">) => n.managerId === managerFilter);
+  const visibleNjs = managerFilter === "All" ? (defaultRows ?? []) : (defaultRows ?? []).filter(n => n.managerId === managerFilter);
 
   // ── NJ name sets ──────────────────────────────────────────────────────────
+  // Count first names to detect uniqueness (e.g. only one "Deepa" → match API's "Deepa" to "Deepa Saha")
+  const firstNameCount = new Map<string, number>();
+  for (const n of visibleNjs) {
+    const first = normName(n.name).split(/\s+/)[0];
+    if (first) firstNameCount.set(first, (firstNameCount.get(first) ?? 0) + 1);
+  }
+
   const njNameSet = new Set<string>();
   for (const n of visibleNjs) {
     const base = normName(n.name);
     njNameSet.add(base);
     const words = base.split(/\s+/).filter(Boolean);
     if (words.length >= 3) njNameSet.add(`${words[0]} ${words[words.length - 1]}`);
+    if (words[0] && firstNameCount.get(words[0]) === 1) njNameSet.add(words[0]);
   }
 
-  const njMeta = new Map(
-    visibleNjs.map((n: Doc<"newJoiners">) => [
-      normName(n.name),
-      { joinDate: n.joinDate, tenureMonths: n.tenureMonths, designation: n.designation },
-    ])
-  );
+  const njMeta = new Map<string, { joinDate: string; tenureMonths: number; designation: string | null }>();
+  for (const n of visibleNjs) {
+    const base = normName(n.name);
+    const meta = { joinDate: n.joinDate, tenureMonths: n.tenureMonths, designation: n.designation ?? null };
+    njMeta.set(base, meta);
+    const words = base.split(/\s+/).filter(Boolean);
+    if (words.length >= 3) njMeta.set(`${words[0]} ${words[words.length - 1]}`, meta);
+    if (words[0] && firstNameCount.get(words[0]) === 1) njMeta.set(words[0], meta);
+  }
 
   function getRowMeta(cce: string) {
     for (const candidate of normCCECandidates(cce)) {
@@ -287,7 +302,11 @@ export default function ROIPage() {
   // ── DB NR totals (never changes with date filter) ─────────────────────────
   const dbNRMap = new Map<string, number | null>();
   for (const r of (defaultRows ?? [])) {
-    dbNRMap.set(normName(r.name), r.totalNR ?? null);
+    const base = normName(r.name);
+    dbNRMap.set(base, r.totalNR ?? null);
+    const words = base.split(/\s+/).filter(Boolean);
+    if (words.length >= 3) dbNRMap.set(`${words[0]} ${words[words.length - 1]}`, r.totalNR ?? null);
+    if (words[0] && firstNameCount.get(words[0]) === 1) dbNRMap.set(words[0], r.totalNR ?? null);
   }
 
   function getDbROI(cce: string): number | null {
@@ -298,7 +317,7 @@ export default function ROIPage() {
   }
 
   // ── Filtered + sorted rows ────────────────────────────────────────────────
-  const matchedRows = allRows !== null && njs !== undefined
+  const matchedRows = allRows !== null && defaultRows !== undefined
     ? (njNameSet.size > 0
         ? allRows.filter(r => normCCECandidates(r.cce).some(n => njNameSet.has(n)))
         : allRows)
@@ -308,8 +327,14 @@ export default function ROIPage() {
     (matchedRows ?? []).flatMap(r => normCCECandidates(r.cce))
   );
   const zeroRows: FlatRow[] = visibleNjs
-    .filter((n: Doc<"newJoiners">) => !matchedNormNames.has(normName(n.name)))
-    .map((n: Doc<"newJoiners">) => ({ cce: n.name, leads: 0, registration: null, roi: 0 }));
+    .filter((n) => {
+      const base = normName(n.name);
+      if (matchedNormNames.has(base)) return false;
+      const first = base.split(/\s+/)[0];
+      if (first && firstNameCount.get(first) === 1 && matchedNormNames.has(first)) return false;
+      return true;
+    })
+    .map((n) => ({ cce: n.name, leads: 0, registration: null, roi: 0 }));
 
   const rows = matchedRows ? [...matchedRows, ...zeroRows] : null;
 
@@ -332,16 +357,19 @@ export default function ROIPage() {
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("Request timed out — please try again")), 30_000)
       );
-      const result = await Promise.race([
-        fetchROI({ from_date: toApiDate(from), to_date: toApiDate(to), display_column: "CCE" }),
-        timeout,
-      ]);
+      const fetchPromise = fetch("/api/roi", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from_date: toApiDate(from), to_date: toApiDate(to), display_column: "CCE" }),
+      }).then(r => r.ok ? r.json() : Promise.reject(new Error("API request failed")));
+      const result = await Promise.race([fetchPromise, timeout]);
       if (result?.statuscode !== 200) {
         setError(result?.message ?? "API returned a non-200 status");
         setAllRows(null);
         return;
       }
       const raw: RawApiRow[] = Array.isArray(result.content) ? result.content : [];
+      if (raw.length > 0) console.log("[ROI API] first raw row:", JSON.stringify(raw[0]));
       const flatRows = raw.map(flattenRow);
       writeROICache({ rows: flatRows, fromDate: from, toDate: to });
       setAllRows(flatRows);
@@ -351,15 +379,15 @@ export default function ROIPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [fetchROI]);
+  }, []);
 
   // Auto-fetch once auth is confirmed ready
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
+    if (authStatus === "authenticated") {
       doFetch(fromInput, toInput);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, isAuthenticated]);
+  }, [authStatus]);
 
   // ── Stat cards from DB ────────────────────────────────────────────────────
   const withNR         = (defaultRows ?? []).filter(r => r.totalNR !== null);

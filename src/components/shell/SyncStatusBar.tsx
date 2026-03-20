@@ -1,9 +1,8 @@
 "use client";
 
-import { useQuery } from "convex/react";
-import { api } from "@/../convex/_generated/api";
-import { Doc } from "@/../convex/_generated/dataModel";
+import { useState, useEffect } from "react";
 import { clsx } from "clsx";
+import type { SyncLog } from "@/lib/types";
 
 const MODULE_LABELS: Record<string, string> = {
   Qubits: "Qubits",
@@ -26,7 +25,13 @@ function formatRelative(iso: string) {
 }
 
 export function SyncStatusBar() {
-  const logs = useQuery(api.queries.syncLogs.latestByModule);
+  const [logs, setLogs] = useState<SyncLog[] | null>(null);
+
+  useEffect(() => {
+    fetch("/api/sync-logs")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setLogs(data); });
+  }, []);
 
   if (!logs) return null;
 
@@ -36,7 +41,7 @@ export function SyncStatusBar() {
         RMS Sync
       </span>
       {Object.entries(MODULE_LABELS).map(([mod, label]) => {
-        const log = logs.find((l: Doc<"syncLogs">) => l.module === mod);
+        const log = logs.find((l: SyncLog) => l.module === mod);
         const status = log?.status ?? "unknown";
         return (
           <div key={mod} className="flex items-center gap-1.5 shrink-0">

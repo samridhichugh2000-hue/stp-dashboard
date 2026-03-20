@@ -2,13 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth } from "convex/react";
+import { signIn, useSession } from "next-auth/react";
 import { Zap } from "lucide-react";
 
 export default function LoginPage() {
-  const { isAuthenticated } = useConvexAuth();
-  const { signIn } = useAuthActions();
+  const { data: session, status } = useSession();
   const router = useRouter();
 
   const [email,    setEmail]    = useState("");
@@ -17,20 +15,37 @@ export default function LoginPage() {
   const [loading,  setLoading]  = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) router.replace("/dashboard/target");
-  }, [isAuthenticated, router]);
+    if (status === "authenticated") router.replace("/dashboard/target");
+  }, [status, router]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await signIn("password", { email: email.trim(), password, flow: "signIn" });
-      // Redirect handled by useEffect once isAuthenticated propagates
+      const result = await signIn("credentials", {
+        email: email.trim(),
+        password,
+        redirect: false,
+      });
+      if (result?.error) {
+        setError("Invalid email or password. Please try again.");
+        setLoading(false);
+      } else {
+        router.replace("/dashboard/target");
+      }
     } catch {
       setError("Invalid email or password. Please try again.");
       setLoading(false);
     }
+  }
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-4 border-indigo-300 border-t-indigo-600 animate-spin" />
+      </div>
+    );
   }
 
   return (

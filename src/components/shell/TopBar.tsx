@@ -2,11 +2,9 @@
 
 import { Bell, RefreshCw, ChevronDown, Menu, LogOut } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
-import { useQuery } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
+import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { api } from "@/../convex/_generated/api";
-import { Doc } from "@/../convex/_generated/dataModel";
+import type { SyncLog } from "@/lib/types";
 
 interface TopBarProps {
   userName: string;
@@ -16,17 +14,17 @@ interface TopBarProps {
 }
 
 const ROLE_COLORS: Record<string, string> = {
-  admin: "bg-rose-100 text-rose-700",
+  admin:   "bg-rose-100 text-rose-700",
   manager: "bg-indigo-100 text-indigo-700",
-  viewer: "bg-sky-100 text-sky-700",
-  nj: "bg-emerald-100 text-emerald-700",
+  viewer:  "bg-sky-100 text-sky-700",
+  nj:      "bg-emerald-100 text-emerald-700",
 };
 
 const ROLE_LABEL: Record<string, string> = {
-  admin: "Admin",
+  admin:   "Admin",
   manager: "Manager",
-  viewer: "Viewer",
-  nj: "New Joiner",
+  viewer:  "Viewer",
+  nj:      "New Joiner",
 };
 
 function getInitials(name: string) {
@@ -39,12 +37,19 @@ function getInitials(name: string) {
 }
 
 export function TopBar({ userName, userRole, onRefresh, onMobileNavOpen }: TopBarProps) {
-  const [refreshing,    setRefreshing]    = useState(false);
-  const [userMenuOpen,  setUserMenuOpen]  = useState(false);
+  const [refreshing,   setRefreshing]   = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [syncLogs,     setSyncLogs]     = useState<SyncLog[] | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const { signOut } = useAuthActions();
-  const router = useRouter();
-  const syncLogs = useQuery(api.queries.syncLogs.latestByModule);
+  const router  = useRouter();
+
+  // Fetch sync logs on mount
+  useEffect(() => {
+    fetch("/api/sync-logs")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setSyncLogs(data); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -57,17 +62,17 @@ export function TopBar({ userName, userRole, onRefresh, onMobileNavOpen }: TopBa
   }, []);
 
   async function handleSignOut() {
-    await signOut();
+    await signOut({ redirect: false });
     router.replace("/login");
   }
 
-  const hasError = false; // hidden
-  const isRunning = syncLogs?.some((l: Doc<"syncLogs">) => l.status === "running");
+  const hasError  = false; // hidden
+  const isRunning = syncLogs?.some((l: SyncLog) => l.status === "running");
 
   const lastSync = syncLogs
     ? syncLogs
-        .filter((l: Doc<"syncLogs">) => l.status === "success")
-        .map((l: Doc<"syncLogs">) => l.lastSyncAt)
+        .filter((l: SyncLog) => l.status === "success")
+        .map((l: SyncLog) => l.lastSyncAt)
         .sort()
         .pop()
     : null;
@@ -90,28 +95,27 @@ export function TopBar({ userName, userRole, onRefresh, onMobileNavOpen }: TopBa
 
   const today = new Date().toLocaleDateString("en-IN", {
     weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
+    year:    "numeric",
+    month:   "long",
+    day:     "numeric",
   });
 
   const syncStatus = hasError ? "error" : isRunning ? "running" : "ok";
   const syncColors = {
-    ok: "text-emerald-600 bg-emerald-50",
+    ok:      "text-emerald-600 bg-emerald-50",
     running: "text-amber-600 bg-amber-50",
-    error: "text-red-600 bg-red-50",
+    error:   "text-red-600 bg-red-50",
   };
   const syncDotColors = {
-    ok: "bg-emerald-500",
+    ok:      "bg-emerald-500",
     running: "bg-amber-400 pulse-dot",
-    error: "bg-red-500",
+    error:   "bg-red-500",
   };
 
   return (
     <header className="flex items-center justify-between px-4 md:px-6 py-3 bg-white/80 backdrop-blur-sm border-b border-gray-200/70 sticky top-0 z-10 no-print shadow-sm">
       {/* Left: hamburger (mobile) + date (desktop) */}
       <div className="flex items-center gap-2 md:gap-3">
-        {/* Hamburger — mobile only */}
         <button
           onClick={onMobileNavOpen}
           className="md:hidden p-2 rounded-xl text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
@@ -120,7 +124,6 @@ export function TopBar({ userName, userRole, onRefresh, onMobileNavOpen }: TopBa
           <Menu size={18} />
         </button>
 
-        {/* Date — hidden on small screens */}
         <div className="hidden sm:block">
           <div className="text-sm font-medium text-gray-900">{today.split(",")[0]},</div>
           <div className="text-xs text-gray-500 -mt-0.5">{today.split(",").slice(1).join(",").trim()}</div>
@@ -129,7 +132,7 @@ export function TopBar({ userName, userRole, onRefresh, onMobileNavOpen }: TopBa
 
       {/* Right: sync + refresh + alerts + user */}
       <div className="flex items-center gap-2 md:gap-3">
-        {/* Sync status chip — hidden on xs */}
+        {/* Sync status chip */}
         <div
           className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${syncColors[syncStatus]}`}
         >
@@ -143,7 +146,6 @@ export function TopBar({ userName, userRole, onRefresh, onMobileNavOpen }: TopBa
             : "Awaiting sync"}
         </div>
 
-        {/* Sync dot — xs only */}
         <span
           className={`sm:hidden w-2 h-2 rounded-full ${syncDotColors[syncStatus]}`}
           title={hasError ? "Sync error" : isRunning ? "Syncing" : "Synced"}
@@ -167,7 +169,6 @@ export function TopBar({ userName, userRole, onRefresh, onMobileNavOpen }: TopBa
           )}
         </button>
 
-        {/* Divider */}
         <div className="w-px h-7 bg-gray-200" />
 
         {/* User chip + dropdown */}

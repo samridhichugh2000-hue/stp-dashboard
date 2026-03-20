@@ -1,11 +1,16 @@
 "use client";
-import { useQuery } from "convex/react";
-import { api } from "@/../convex/_generated/api";
-import { Id } from "@/../convex/_generated/dataModel";
+import { useState, useEffect } from "react";
+import type { NRRecord } from "@/lib/types";
 import { NRTrendChart } from "@/components/panels/nrd/NRTrendChart";
 
 export function NRInlineTrend({ njId, njName }: { njId: string; njName: string }) {
-  const records = useQuery(api.queries.nr.byNJ, { njId: njId as Id<"newJoiners"> });
+  const [records, setRecords] = useState<NRRecord[] | undefined>(undefined);
+
+  useEffect(() => {
+    fetch(`/api/nr?q=byNJ&njId=${njId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { setRecords(data ?? []); });
+  }, [njId]);
 
   return (
     <div className="bg-white rounded-xl border border-indigo-100 shadow-sm p-4">
