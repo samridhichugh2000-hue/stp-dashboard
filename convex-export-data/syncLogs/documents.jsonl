@@ -1,0 +1,13 @@
+{"_creationTime":1771827639211.2976,"_id":"kx71qm9cn6yy6e5q8kxpz35fxn81pzgn","lastSyncAt":"2026-03-13T00:05:51.295Z","module":"qubits","recordsProcessed":300.0,"status":"success"}
+{"_creationTime":1771827201843.1494,"_id":"kx72smjfd4hfmam90h1hdva55981q5j3","lastSyncAt":"2026-02-19T23:45:44.361Z","module":"RCB","recordsProcessed":56.0,"status":"success"}
+{"_creationTime":1772006441221.7715,"_id":"kx73wr8yzzwjxktenfvwcr68v181vgqy","lastSyncAt":"2026-03-01T17:01:03.261Z","module":"sheets","recordsProcessed":636.0,"status":"success"}
+{"_creationTime":1771828539399.1843,"_id":"kx76z462gy6gsfdqhca05e2fqn81p4pt","lastSyncAt":"2026-03-12T20:30:24.530Z","module":"rcb","recordsProcessed":130.0,"status":"success"}
+{"_creationTime":1771875001042.9773,"_id":"kx779tpmres0qcxqjqvaxc6jdn81q71z","errorMessage":"GetCCENRData failed (403): Forbidden : Permission denied","lastSyncAt":"2026-03-12T19:30:02.898Z","module":"nr","status":"error"}
+{"_creationTime":1771828539221.0408,"_id":"kx77n07e7q66ack8fhv1fm5x5181p1qq","lastSyncAt":"2026-03-13T00:05:42.392Z","module":"leads","recordsProcessed":60.0,"status":"success"}
+{"_creationTime":1772369048962.869,"_id":"kx78r6be51rsb3n9w8803n5y8582377n","errorMessage":"GetSalesData failed (403): Forbidden : Permission denied","lastSyncAt":"2026-03-13T00:00:03.587Z","module":"csm","status":"error"}
+{"_creationTime":1771827201843.1492,"_id":"kx796zx2y62bda3hb138wq042581qvb9","lastSyncAt":"2026-02-19T23:39:26.494Z","module":"ROI","recordsProcessed":246.0,"status":"success"}
+{"_creationTime":1771827201843.1484,"_id":"kx7bcrw373q8f4n6hq6jcegc7d81qpnf","lastSyncAt":"2026-02-19T23:19:29.545Z","module":"Qubits","recordsProcessed":51.0,"status":"success"}
+{"_creationTime":1772411401101.886,"_id":"kx7d8980q19ngzbenvckavaq49824j6d","lastSyncAt":"2026-03-09T00:30:07.488Z","module":"roi","recordsProcessed":40.0,"status":"success"}
+{"_creationTime":1771827201843.149,"_id":"kx7ewnjnp033e0cmngnmbqbcds81phqg","lastSyncAt":"2026-02-19T23:28:57.432Z","module":"NRD","recordsProcessed":121.0,"status":"success"}
+{"_creationTime":1771827201843.1487,"_id":"kx7f22pphbe109caq0v0tta6k581q49q","lastSyncAt":"2026-02-19T23:51:10.764Z","module":"Leads","recordsProcessed":204.0,"status":"success"}
+{"_creationTime":1772102201245.5813,"_id":"kx7f3a9fj5zvtpse9q149kymv981wjkp","lastSyncAt":"2026-03-12T04:00:04.294Z","module":"teams_huddles","recordsProcessed":44.0,"status":"success"}
