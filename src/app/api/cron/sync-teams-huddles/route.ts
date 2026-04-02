@@ -196,8 +196,11 @@ async function upsertSyncLog(status: "running" | "success" | "error", extra: { e
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const secret = req.headers.get("x-cron-secret");
-  if (secret !== process.env.CRON_SECRET && secret !== "stp-cron-2026") {
+  const authHeader  = req.headers.get("authorization");
+  const legacyHeader = req.headers.get("x-cron-secret");
+  const validBearer = authHeader === `Bearer ${process.env.CRON_SECRET}`;
+  const validLegacy = legacyHeader === process.env.CRON_SECRET || legacyHeader === "stp-cron-2026";
+  if (!validBearer && !validLegacy) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

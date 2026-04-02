@@ -12,6 +12,7 @@ import { HuddleLog } from "@/components/panels/overview/HuddleLog";
 import { DayTaskTracker, HuddleStatus } from "@/components/panels/overview/DayTaskTracker";
 import { NJDetailModal } from "@/components/panels/overview/NJDetailModal";
 import { DSRHistoryModal } from "@/components/panels/overview/DSRHistoryModal";
+
 import { ExportButton } from "@/components/shared/ExportButton";
 import {
   Users, Search, X,
@@ -62,11 +63,12 @@ type FilterOption = DisplayCategory | "All" | "Active";
 
 function getDisplayCategory(nj: NJ): DisplayCategory {
   if (!nj.isActive) return "Inactive";
+  if (nj.stpClosed) return nj.hasPositiveNR ? "Developed" : "Not Developed"; // STP closed by admin
   const wds = workingDaysSince(nj.joinDate);
-  if (wds <= 14) return "STP WIP";                            // Standard 14-day window
-  if (wds <= 18 && nj.stpExtendedDays > 0) return "STP WIP"; // Extended window still active
+  if (wds <= 14) return "STP WIP";                              // Standard 14-day window
+  if (wds <= 18 && nj.stpExtendedDays > 0) return "STP WIP";   // Extended window still active
   if (wds <= 18 && nj.stpExtendedDays === 0) return "STP WIP"; // In extended range but no meetings yet
-  return nj.hasPositiveNR ? "Developed" : "Not Developed";    // Based on actual NR performance
+  return nj.hasPositiveNR ? "Developed" : "Not Developed";      // Auto-graduated after day 18
 }
 
 const CATEGORY_STYLE: Record<DisplayCategory, string> = {

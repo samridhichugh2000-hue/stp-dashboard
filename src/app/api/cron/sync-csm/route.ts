@@ -7,10 +7,11 @@ const MODULE = "csm";
 const API_BASE_URL = "https://api.koenig-solutions.com";
 
 async function getAuthToken() {
-  const username = process.env.NR_API_USERNAME;
-  const password = process.env.NR_API_PASSWORD;
-  const role = process.env.NR_API_ROLE ?? "PMS";
-  if (!username || !password) throw new Error("NR_API_USERNAME and NR_API_PASSWORD not set");
+  // Prefer NR_API creds; fall back to RCB_API creds (same Koenig instance, HR role also has Sales access)
+  const username = process.env.NR_API_USERNAME || process.env.RCB_API_USERNAME;
+  const password = process.env.NR_API_PASSWORD || process.env.RCB_API_PASSWORD;
+  const role     = process.env.NR_API_ROLE || process.env.RCB_API_ROLE || "HR";
+  if (!username || !password) throw new Error("No Koenig API credentials set (NR_API or RCB_API)");
 
   const res = await fetch(`${API_BASE_URL}/api/Kites/Operator/GetToken`, {
     method: "POST",
@@ -26,18 +27,55 @@ async function getAuthToken() {
 function parseDOJ(raw: string): string | null {
   if (!raw) return null;
   const s = raw.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // YYYY-MM-DD (possibly with time suffix)
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+
   const MONTH_ABBR: Record<string, string> = {
     jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",
     jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12",
   };
-  const match = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
-  if (!match) return null;
-  const [, dd, mon, yrRaw] = match;
-  const mm = MONTH_ABBR[mon.toLowerCase()];
-  if (!mm) return null;
-  const yr = yrRaw.length === 2 ? `20${yrRaw}` : yrRaw;
-  return `${yr}-${mm}-${dd.padStart(2, "0")}`;
+
+  // DD-Mon-YY or DD-Mon-YYYY  (e.g. 02-Apr-26 or 02-Apr-2026)
+  const monMatch = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
+  if (monMatch) {
+    const [, dd, mon, yrRaw] = monMatch;
+    const mm = MONTH_ABBR[mon.toLowerCase()];
+    if (mm) {
+      const yr = yrRaw.length === 2 ? `20${yrRaw}` : yrRaw;
+      return `${yr}-${mm}-${dd.padStart(2, "0")}`;
+    }
+  }
+
+  // DD/MM/YYYY  (e.g. 02/04/2026)
+  const slashDM = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashDM) {
+    const [, dd, mm, yyyy] = slashDM;
+    return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+  }
+
+  // MM/DD/YYYY  — try only when month > 12 is impossible (ambiguous, but common from US locale)
+  // Handled by slashDM above; skip separate case to avoid ambiguity.
+
+  // "April 2, 2026" or "2 April 2026"
+  const MONTH_FULL: Record<string, string> = {
+    january:"01",february:"02",march:"03",april:"04",may:"05",june:"06",
+    july:"07",august:"08",september:"09",october:"10",november:"11",december:"12",
+  };
+  const longFull = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+  if (longFull) {
+    const [, dd, mon, yyyy] = longFull;
+    const mm = MONTH_FULL[mon.toLowerCase()] ?? MONTH_ABBR[mon.toLowerCase().slice(0, 3)];
+    if (mm) return `${yyyy}-${mm}-${dd.padStart(2, "0")}`;
+  }
+  const longFull2 = s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/);
+  if (longFull2) {
+    const [, mon, dd, yyyy] = longFull2;
+    const mm = MONTH_FULL[mon.toLowerCase()] ?? MONTH_ABBR[mon.toLowerCase().slice(0, 3)];
+    if (mm) return `${yyyy}-${mm}-${dd.padStart(2, "0")}`;
+  }
+
+  return null;
 }
 
 function tenureMonths(joinDateISO: string): number {
@@ -64,8 +102,11 @@ async function upsertSyncLog(status: string, extra: Record<string, unknown> = {}
 }
 
 export async function GET(req: NextRequest) {
-  const cronSecret = req.headers.get("x-cron-secret");
-  if (cronSecret !== process.env.CRON_SECRET) {
+  const authHeader  = req.headers.get("authorization");
+  const legacyHeader = req.headers.get("x-cron-secret");
+  const valid = authHeader === `Bearer ${process.env.CRON_SECRET}` ||
+    legacyHeader === process.env.CRON_SECRET || legacyHeader === "stp-cron-2026";
+  if (!valid) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -92,22 +133,31 @@ export async function GET(req: NextRequest) {
     const rawRecords: Record<string, unknown>[] = Array.isArray(data.content) ? data.content : [];
     const upsertedEmpIds: string[] = [];
     let count = 0;
+    let skippedNoDept = 0, skippedBadDOJ = 0, skippedGarbage = 0, skippedNoEmpId = 0;
 
     for (const raw of rawRecords) {
       const empIdRaw = raw.EmpCode ?? raw.EmpId ?? raw.empId;
-      if (!empIdRaw) continue;
+      if (!empIdRaw) { skippedNoEmpId++; continue; }
       const empId = String(empIdRaw).trim();
-      if (!empId) continue;
+      if (!empId) { skippedNoEmpId++; continue; }
 
       const department = String(raw.Department ?? raw.Dept ?? raw.Division ?? "").trim();
-      if (!department.toLowerCase().includes("sales")) continue;
+      // Allow blank department (new joiners may not have it set yet in Koenig).
+      // Only skip if department is explicitly something other than sales.
+      if (department && !department.toLowerCase().includes("sales")) {
+        skippedNoDept++;
+        continue;
+      }
 
       const managerName = String(raw.ReportingManager ?? raw.ManagerName ?? raw.Manager ?? "").trim();
-      if (managerName.length >= 25 && !/\s/.test(managerName) && /^[a-zA-Z0-9]+$/.test(managerName)) continue;
+      if (managerName.length >= 25 && !/\s/.test(managerName) && /^[a-zA-Z0-9]+$/.test(managerName)) {
+        skippedGarbage++;
+        continue;
+      }
 
       const dojRaw = String(raw.DOJ ?? raw.DateOfJoining ?? raw.JoiningDate ?? "").trim();
       const joinDate = parseDOJ(dojRaw);
-      if (!joinDate) continue;
+      if (!joinDate) { skippedBadDOJ++; continue; }
 
       const months = tenureMonths(joinDate);
       const name = String(raw.Name ?? raw.EmployeeName ?? "").trim();
@@ -150,7 +200,12 @@ export async function GET(req: NextRequest) {
     }
 
     await upsertSyncLog("success", { recordsProcessed: count });
-    return NextResponse.json({ ok: true, count });
+    return NextResponse.json({
+      ok: true,
+      synced: count,
+      skipped: { noEmpId: skippedNoEmpId, nonSalesDept: skippedNoDept, badDOJ: skippedBadDOJ, garbageManager: skippedGarbage },
+      rawTotal: rawRecords.length,
+    });
   } catch (err) {
     await upsertSyncLog("error", { errorMessage: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });

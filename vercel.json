@@ -20,6 +20,26 @@
     {
       "path": "/api/cron/sync-teams-huddles",
       "schedule": "30 4 * * *"
+    },
+    {
+      "path": "/api/cron/daily-reminders",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/sync-dsr",
+      "schedule": "30 13 * * 1-5"
+    },
+    {
+      "path": "/api/cron/dsr-reminder",
+      "schedule": "30 16 * * 1-5"
+    },
+    {
+      "path": "/api/cron/dsr-reminder",
+      "schedule": "0 19 * * 1-5"
+    },
+    {
+      "path": "/api/cron/dsr-reminder",
+      "schedule": "0 21 * * 1-5"
     }
   ]
 }

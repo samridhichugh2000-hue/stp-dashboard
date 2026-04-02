@@ -17,6 +17,7 @@ import {
   Zap,
   X,
   GraduationCap,
+  Activity,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -31,6 +32,13 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
+  {
+    label: "STP Tracker",
+    href: "/dashboard/stp-tracker",
+    icon: <Activity size={17} />,
+    roles: ["admin", "manager"],
+    color: "from-fuchsia-400 to-purple-600",
+  },
   {
     label: "Target Vs Achievement",
     href: "/dashboard/target",

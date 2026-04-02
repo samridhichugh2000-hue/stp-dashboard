@@ -50,6 +50,39 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ totalPositive, totalNegative, positiveWithin4, negativeAfter4 });
   }
 
+  if (q === "fluctuations") {
+    const all = await db.select().from(nrRecords).all();
+    const activeNJs = await db
+      .select()
+      .from(newJoiners)
+      .where(eq(newJoiners.isActive, true))
+      .all();
+
+    const flagged: { njId: number; name: string; empId: string; streak: number }[] = [];
+
+    for (const nj of activeNJs) {
+      if (!nj.empId || nj.empId.startsWith("MOCK-")) continue;
+      const records = all
+        .filter(r => r.njId === nj.id)
+        .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
+
+      if (records.length < 3) continue;
+
+      // Count alternating streak from most recent
+      let streak = 1;
+      for (let i = records.length - 2; i >= 0; i--) {
+        if (records[i].isPositive !== records[i + 1].isPositive) streak++;
+        else break;
+      }
+      if (streak >= 3) {
+        flagged.push({ njId: nj.id, name: nj.name ?? "", empId: nj.empId, streak });
+      }
+    }
+
+    flagged.sort((a, b) => b.streak - a.streak);
+    return NextResponse.json(flagged);
+  }
+
   // monthlyGrid (default)
   const all = await db.select().from(nrRecords).all();
   const today = new Date();

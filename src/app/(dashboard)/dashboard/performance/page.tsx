@@ -7,7 +7,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LabelList,
 } from "recharts";
 import { fmtTenure } from "@/lib/formatTenure";
-import type { PerformanceRow, NJ } from "@/lib/types";
+import type { PerformanceRow, NJ, PerformanceAlert } from "@/lib/types";
+import { AlertCentre } from "@/components/panels/performance/AlertCentre";
 
 type NRROIStatus = "Positive" | "Negative" | null;
 
@@ -97,6 +98,9 @@ export default function PerformancePage() {
   const [managerFilter, setManagerFilter] = useState("All");
   const [rows, setRows] = useState<PerformanceRow[] | null>(null);
   const [njs, setNjs] = useState<NJ[] | null>(null);
+  const [alerts, setAlerts] = useState<PerformanceAlert[]>([]);
+  type Tab = "alerts" | "charts" | "table";
+  const [activeTab, setActiveTab] = useState<Tab>("charts");
 
   useEffect(() => {
     fetch("/api/performance")
@@ -105,7 +109,12 @@ export default function PerformancePage() {
     fetch("/api/nj")
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setNjs(data); });
+    fetch("/api/performance-alerts")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (Array.isArray(data)) setAlerts(data); });
   }, []);
+
+  const pendingAlertCount = alerts.filter(a => !a.acknowledgedAt).length;
 
   const isGarbageId = (id: string) =>
     id.length >= 25 && !/\s/.test(id) && /^[a-zA-Z0-9]+$/.test(id);
@@ -211,10 +220,37 @@ export default function PerformancePage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">NJ Performance Status</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Development status and suggested actions per CSM</p>
+      {/* Header + tabs */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">NJ Performance Status</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Development status and suggested actions per CSM</p>
+        </div>
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+          {([
+            { key: "alerts", label: "Alert Centre",            badge: pendingAlertCount },
+            { key: "charts", label: "Charts",                  badge: 0 },
+            { key: "table",  label: "CSM Performance",         badge: 0 },
+          ] as { key: Tab; label: string; badge: number }[]).map(t => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className={clsx(
+                "relative px-3 py-1.5 text-xs font-semibold rounded-lg transition-all",
+                activeTab === t.key
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              {t.label}
+              {t.badge > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                  {t.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Stat cards — always overall totals */}
@@ -230,8 +266,21 @@ export default function PerformancePage() {
         ))}
       </div>
 
+      {/* Alert Centre tab */}
+      {activeTab === "alerts" && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Alert Centre</p>
+            <p className="text-[10px] text-gray-400 mt-0.5">PA / PIP / Exit alerts requiring acknowledgement</p>
+          </div>
+          <div className="p-5">
+            <AlertCentre />
+          </div>
+        </div>
+      )}
+
       {/* ── Charts (react to manager filter) ──────────────────────────────────── */}
-      {rows && (
+      {activeTab === "charts" && rows && (
         <>
           {/* Context label */}
           <div className="flex items-center gap-2">
@@ -365,7 +414,7 @@ export default function PerformancePage() {
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+      {activeTab === "table" && <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         {/* Search + Manager filter */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <div className="relative flex-1 min-w-[200px]">
@@ -459,7 +508,7 @@ export default function PerformancePage() {
         ) : (
           <div className="animate-pulse h-64 bg-gray-50 rounded-xl" />
         )}
-      </div>
+      </div>}
 
     </div>
   );

@@ -5,114 +5,86 @@ import { CheckCircle2, Circle, AlertCircle } from "lucide-react";
 import { fmtTenure } from "@/lib/formatTenure";
 import type { PerformanceAlert } from "@/lib/types";
 
-interface NJ {
-  id: number;
-  name: string;
-  joinDate: string;
+interface Props {
+  njId:         number;
+  njName:       string;
+  joinDate:     string;
   tenureMonths: number;
-  currentPhase: string;
+  alerts:       PerformanceAlert[];
 }
 
 const MILESTONES = [
-  { month: 1, label: "Orientation", sublabel: "End" },
-  { month: 2, label: "Training", sublabel: "Complete" },
-  { month: 3, label: "PA", sublabel: "Review" },
-  { month: 4, label: "PIP", sublabel: "Eligible" },
-  { month: 5, label: "Exit", sublabel: "Review" },
+  { month: 1, label: "Orientation", sublabel: "End",      trigger: null    },
+  { month: 2, label: "Training",    sublabel: "Complete", trigger: null    },
+  { month: 3, label: "PA",          sublabel: "Review",   trigger: "PA"    },
+  { month: 4, label: "PIP",         sublabel: "Eligible", trigger: "PIP"   },
+  { month: 5, label: "Exit",        sublabel: "Review",   trigger: "EXIT"  },
 ];
 
-export function MilestoneTimeline({
-  nj,
-  alerts,
-}: {
-  nj: NJ;
-  alerts: PerformanceAlert[];
-}) {
-  const progressPct = Math.min((nj.tenureMonths / 5) * 100, 100);
+const progressPct = (tenure: number) => Math.min((tenure / 5) * 100, 100);
 
+export function MilestoneTimeline({ njId, njName, joinDate, tenureMonths, alerts }: Props) {
   return (
-    <div className="animate-slide-up">
-      {/* NJ name + tenure */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <span className="text-sm font-semibold text-gray-800">{nj.name}</span>
-          <span className="text-xs text-gray-400 ml-2">{fmtTenure(nj.joinDate)} tenure</span>
-        </div>
-        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
-          {nj.currentPhase}
-        </span>
+    <div className="py-3 px-4 bg-gray-50 rounded-xl space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-gray-700">{njName}</span>
+        <span className="text-[10px] text-gray-400">{fmtTenure(joinDate)} tenure</span>
       </div>
 
       {/* Timeline track */}
       <div className="relative">
         {/* Background track */}
-        <div className="absolute top-4 left-0 right-0 h-1.5 bg-gray-100 rounded-full" />
+        <div className="absolute top-4 left-0 right-0 h-1.5 bg-gray-200 rounded-full" />
         {/* Progress fill */}
         <div
-          className="absolute top-4 left-0 h-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 bar-fill"
-          style={{ "--bar-width": `${progressPct}%` } as React.CSSProperties}
+          className="absolute top-4 left-0 h-1.5 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-500"
+          style={{ width: `${progressPct(tenureMonths)}%` }}
         />
 
-        {/* Milestones */}
+        {/* Milestone nodes */}
         <div className="relative flex justify-between">
-          {MILESTONES.map((m) => {
-            const reached = nj.tenureMonths >= m.month;
-            const isCurrent = nj.tenureMonths === m.month - 1;
-            const alert = alerts.find(
-              (a) =>
-                a.njId === nj.id &&
-                ((m.month === 3 && a.alertType === "PA") ||
-                  (m.month === 4 && a.alertType === "PIP") ||
-                  (m.month === 5 && a.alertType === "EXIT"))
-            );
+          {MILESTONES.map(m => {
+            const reached   = tenureMonths >= m.month;
+            const isCurrent = tenureMonths >= m.month - 1 && tenureMonths < m.month;
+            const alert     = m.trigger
+              ? alerts.find(a => a.njId === njId && a.alertType === m.trigger)
+              : null;
+            const isAlert   = alert && !alert.acknowledgedAt;
 
             return (
               <div key={m.month} className="flex flex-col items-center" style={{ width: "20%" }}>
-                {/* Node */}
-                <div
-                  className={clsx(
-                    "w-8 h-8 rounded-full flex items-center justify-center z-10 transition-all duration-300",
-                    alert && !alert.acknowledgedAt
-                      ? "bg-red-100 text-red-600"
-                      : reached
-                      ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
-                      : isCurrent
-                      ? "bg-white border-2 border-indigo-400 text-indigo-400"
-                      : "bg-white border-2 border-gray-200 text-gray-300"
-                  )}
-                >
-                  {alert && !alert.acknowledgedAt ? (
-                    <AlertCircle size={15} />
-                  ) : reached ? (
-                    <CheckCircle2 size={15} />
-                  ) : (
-                    <Circle size={15} />
-                  )}
+                <div className={clsx(
+                  "w-8 h-8 rounded-full flex items-center justify-center z-10 transition-all",
+                  isAlert
+                    ? "bg-red-100 text-red-600 ring-2 ring-red-300"
+                    : reached
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-200"
+                    : isCurrent
+                    ? "bg-white border-2 border-indigo-400 text-indigo-400"
+                    : "bg-white border-2 border-gray-200 text-gray-300"
+                )}>
+                  {isAlert
+                    ? <AlertCircle size={15} />
+                    : reached
+                    ? <CheckCircle2 size={15} />
+                    : <Circle size={15} />
+                  }
                 </div>
-
-                {/* Label */}
-                <div className="mt-2 text-center">
-                  <div
-                    className={clsx(
-                      "text-[10px] font-semibold leading-tight",
-                      reached ? "text-indigo-700" : "text-gray-400"
-                    )}
-                  >
+                <div className="mt-1.5 text-center">
+                  <p className={clsx(
+                    "text-[10px] font-semibold",
+                    reached ? "text-indigo-700" : "text-gray-400"
+                  )}>
                     {m.label}
-                  </div>
-                  <div className="text-[10px] text-gray-400">{m.sublabel}</div>
+                  </p>
+                  <p className="text-[9px] text-gray-400">{m.sublabel}</p>
                   {alert && (
-                    <div
-                      className={clsx(
-                        "text-[10px] font-bold mt-0.5 px-1 rounded",
-                        alert.acknowledgedAt
-                          ? "text-gray-400 bg-gray-50"
-                          : "text-red-600 bg-red-50"
-                      )}
-                    >
-                      {alert.alertType}
-                      {alert.acknowledgedAt ? " ✓" : " !"}
-                    </div>
+                    <p className={clsx(
+                      "text-[9px] font-bold mt-0.5",
+                      alert.acknowledgedAt ? "text-gray-400" : "text-red-600"
+                    )}>
+                      {alert.acknowledgedAt ? "✓ Ack'd" : "! Pending"}
+                    </p>
                   )}
                 </div>
               </div>

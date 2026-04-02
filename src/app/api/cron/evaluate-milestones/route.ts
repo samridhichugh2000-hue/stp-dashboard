@@ -20,8 +20,11 @@ function workingDaysSince(dojISO: string): number {
 }
 
 export async function GET(req: NextRequest) {
-  const cronSecret = req.headers.get("x-cron-secret");
-  if (cronSecret !== process.env.CRON_SECRET) {
+  const authHeader  = req.headers.get("authorization");
+  const legacyHeader = req.headers.get("x-cron-secret");
+  const valid = authHeader === `Bearer ${process.env.CRON_SECRET}` ||
+    legacyHeader === process.env.CRON_SECRET || legacyHeader === "stp-cron-2026";
+  if (!valid) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -18,7 +18,20 @@ export type NJ = {
   claimedCorporates: number | null;
   nrFromCorporates: number | null;
   stpExtendedDays: number;
-  hasPositiveNR: boolean;
+  stpWipMarked:    boolean | null;
+  stpWipNote:      string | null;
+  stpWipMarkedAt:  string | null;
+  stpWipMarkedBy:  string | null;
+  stpClosed:            boolean | null;
+  stpClosedAt:          string | null;
+  stpClosedBy:          string | null;
+  managerHuddleDone:    boolean | null;
+  managerHuddleDoneAt:  string | null;
+  managerHuddleDoneBy:  string | null;
+  stpMetricsDone:       boolean | null;
+  stpMetricsDoneAt:     string | null;
+  stpMetricsDoneBy:     string | null;
+  hasPositiveNR:        boolean;
 };
 
 export type NRRecord = {

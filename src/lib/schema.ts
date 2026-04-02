@@ -39,8 +39,21 @@ export const newJoiners = sqliteTable("new_joiners", {
   teamId:         text("team_id"),
   claimedCorporates: integer("claimed_corporates"),
   nrFromCorporates:  integer("nr_from_corporates"),
-  stpExtendedDays: integer("stp_extended_days").notNull().default(0),
+  stpExtendedDays:  integer("stp_extended_days").notNull().default(0),
   // Number of completed huddle days beyond the standard 14-day STP window
+  stpWipMarked:    integer("stp_wip_marked", { mode: "boolean" }).default(false),
+  stpWipNote:      text("stp_wip_note"),
+  stpWipMarkedAt:  text("stp_wip_marked_at"),
+  stpWipMarkedBy:  text("stp_wip_marked_by"),
+  stpClosed:            integer("stp_closed", { mode: "boolean" }).default(false),
+  stpClosedAt:          text("stp_closed_at"),
+  stpClosedBy:          text("stp_closed_by"),
+  managerHuddleDone:    integer("manager_huddle_done", { mode: "boolean" }).default(false),
+  managerHuddleDoneAt:  text("manager_huddle_done_at"),
+  managerHuddleDoneBy:  text("manager_huddle_done_by"),
+  stpMetricsDone:       integer("stp_metrics_done", { mode: "boolean" }).default(false),
+  stpMetricsDoneAt:     text("stp_metrics_done_at"),
+  stpMetricsDoneBy:     text("stp_metrics_done_by"),
 });
 
 // ── nrRecords ──────────────────────────────────────────────────────────────────
@@ -207,6 +220,62 @@ export const joiningLeads = sqliteTable("joining_leads", {
   emailSubject:     text("email_subject"),
   emailReceivedAt:  text("email_received_at"),
   updatedAt:        text("updated_at").notNull().default(sql`(datetime('now'))`),
+});
+
+// ── stpTaskOverrides ──────────────────────────────────────────────────────────
+
+export const stpTaskOverrides = sqliteTable("stp_task_overrides", {
+  id:           integer("id").primaryKey({ autoIncrement: true }),
+  njId:         integer("nj_id").notNull().references(() => newJoiners.id, { onDelete: "cascade" }),
+  date:         text("date").notNull(),          // ISO YYYY-MM-DD (working day date)
+  task:         text("task").notNull(),           // huddle | qubits | dsr
+  done:         integer("done", { mode: "boolean" }).notNull(),
+  overriddenBy: text("overridden_by").notNull(),
+  overriddenAt: text("overridden_at").notNull(),
+});
+
+// ── meetingLogs ───────────────────────────────────────────────────────────────
+
+export const meetingLogs = sqliteTable("meeting_logs", {
+  id:             integer("id").primaryKey({ autoIncrement: true }),
+  njId:           integer("nj_id").notNull().references(() => newJoiners.id, { onDelete: "cascade" }),
+  meetingType:    text("meeting_type").notNull(), // Phase1Review | Month1Review | PA | PIP | EXIT | AdHoc
+  scheduledAt:    text("scheduled_at").notNull(), // ISO datetime
+  durationMins:   integer("duration_mins").notNull().default(30),
+  subject:        text("subject").notNull(),
+  attendees:      text("attendees").notNull(),    // JSON array of email strings
+  teamsEventId:   text("teams_event_id"),
+  teamsJoinUrl:   text("teams_join_url"),
+  status:         text("status").notNull().default("Scheduled"), // Scheduled | Completed | Cancelled
+  createdBy:      text("created_by").notNull(),
+  createdAt:      text("created_at").notNull(),
+});
+
+// ── emailLogs ─────────────────────────────────────────────────────────────────
+
+export const emailLogs = sqliteTable("email_logs", {
+  id:           integer("id").primaryKey({ autoIncrement: true }),
+  njId:         integer("nj_id").references(() => newJoiners.id, { onDelete: "set null" }),
+  sentBy:       text("sent_by").notNull(),
+  toAddresses:  text("to_addresses").notNull(), // JSON array
+  subject:      text("subject").notNull(),
+  template:     text("template").notNull(),     // PA | PIP | EXIT | DailyReport | ROISummary | Custom
+  bodySnippet:  text("body_snippet"),
+  sentAt:       text("sent_at").notNull(),
+  status:       text("status").notNull().default("sent"), // sent | failed
+  errorMessage: text("error_message"),
+});
+
+// ── reminderLogs ──────────────────────────────────────────────────────────────
+
+export const reminderLogs = sqliteTable("reminder_logs", {
+  id:             integer("id").primaryKey({ autoIncrement: true }),
+  recipientEmail: text("recipient_email").notNull(),
+  recipientRole:  text("recipient_role").notNull(), // admin | manager | nj
+  reminderType:   text("reminder_type").notNull(),  // DailyAdmin | DailyManager | DailyNJ
+  sentAt:         text("sent_at").notNull(),
+  status:         text("status").notNull().default("sent"),
+  errorMessage:   text("error_message"),
 });
 
 // ── syncLogs ──────────────────────────────────────────────────────────────────

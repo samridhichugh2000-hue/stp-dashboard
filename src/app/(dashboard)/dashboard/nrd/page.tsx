@@ -3,15 +3,25 @@ import { useState, useEffect } from "react";
 import type { NJ, MonthlyGridData, NRDStats } from "@/lib/types";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { MonthlyNRGrid } from "@/components/panels/nrd/MonthlyNRGrid";
+import { AlertTriangle, X, TrendingUp } from "lucide-react";
+
+interface FluctuatingNJ {
+  njId:   number;
+  name:   string;
+  empId:  string;
+  streak: number;
+}
 
 export default function NRDPage() {
   const [selectedNjId, setSelectedNjId] = useState<number | "">("");
   const [gridSearch, setGridSearch] = useState("");
   const [managerFilter, setManagerFilter] = useState("All");
 
-  const [njs, setNjs] = useState<NJ[] | null>(null);
-  const [grid, setGrid] = useState<MonthlyGridData | null>(null);
-  const [stats, setStats] = useState<NRDStats | null>(null);
+  const [njs,          setNjs]          = useState<NJ[] | null>(null);
+  const [grid,         setGrid]         = useState<MonthlyGridData | null>(null);
+  const [stats,        setStats]        = useState<NRDStats | null>(null);
+  const [fluctuating,  setFluctuating]  = useState<FluctuatingNJ[]>([]);
+  const [alertDismiss, setAlertDismiss] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     fetch("/api/nj")
@@ -23,6 +33,9 @@ export default function NRDPage() {
     fetch("/api/nr?q=stats")
       .then(r => r.ok ? r.json() : null)
       .then(data => { if (data) setStats(data); });
+    fetch("/api/nr?q=fluctuations")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (Array.isArray(data)) setFluctuating(data); });
   }, []);
 
   const isGarbageId = (id: string) => id.length >= 25 && !/\s/.test(id) && /^[a-zA-Z0-9]+$/.test(id);
@@ -38,10 +51,12 @@ export default function NRDPage() {
   const filteredNjs = (managerFilter === "All" ? validNjs : validNjs.filter((n: NJ) => n.managerId === managerFilter))
     .sort((a: NJ, b: NJ) => b.joinDate.localeCompare(a.joinDate));
 
-  const njNames = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.name]));
+  const njNames    = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.name]));
   const njJoinDates = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.joinDate]));
-  const njTenures = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.tenureMonths]));
-  const njIds = filteredNjs.map((n: NJ) => String(n.id));
+  const njTenures  = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.tenureMonths]));
+  const njIds      = filteredNjs.map((n: NJ) => String(n.id));
+
+  const visibleAlerts = fluctuating.filter(f => !alertDismiss.has(f.njId));
 
   const statCards = [
     {
@@ -96,6 +111,48 @@ export default function NRDPage() {
           </div>
         ))}
       </div>
+
+      {/* NR Fluctuation Alerts */}
+      {visibleAlerts.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle size={15} className="text-amber-600 flex-shrink-0" />
+            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
+              NR Fluctuation Alerts — {visibleAlerts.length} NJ{visibleAlerts.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {visibleAlerts.map(f => (
+              <div
+                key={f.njId}
+                className="flex items-center gap-2 bg-white border border-amber-200 rounded-xl px-3 py-2 text-xs shadow-sm"
+              >
+                <div>
+                  <p className="font-semibold text-gray-800">{f.name}</p>
+                  <p className="text-[10px] text-gray-400">{f.empId} · {f.streak} alternating months</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setAlertDismiss(prev => new Set([...prev, f.njId]));
+                    setSelectedNjId(f.njId);
+                  }}
+                  className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 whitespace-nowrap"
+                  title="View trend"
+                >
+                  <TrendingUp size={13} />
+                </button>
+                <button
+                  onClick={() => setAlertDismiss(prev => new Set([...prev, f.njId]))}
+                  className="text-gray-300 hover:text-gray-500"
+                  title="Dismiss"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Monthly NR Grid */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -155,6 +212,7 @@ export default function NRDPage() {
             />
           : <div className="animate-pulse h-48 bg-gray-50 rounded-xl" />}
       </div>
+
 
     </div>
   );

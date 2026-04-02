@@ -9,7 +9,7 @@ const CLIENT_ID     = process.env.OUTLOOK_CLIENT_ID     ?? "dcb6ce18-d8cb-4cb1-a
 const CLIENT_SECRET = process.env.OUTLOOK_CLIENT_SECRET!;
 const MAILBOX       = process.env.OUTLOOK_MAILBOX!;  // samridhi.chugh@koenig-solutions.com
 
-const SUBJECT_SEARCH  = "sales training plan";  // KQL search term
+const SUBJECT_SEARCH  = "training";  // KQL search term (no phrase quotes — post-filter handles exactness)
 const SUBJECT_KEYWORD = "Your sales training plan"; // in-code guard
 
 // ── MS Graph auth ─────────────────────────────────────────────────────────────
@@ -47,13 +47,12 @@ function todayIso(): string {
   return new Date().toISOString().split("T")[0];
 }
 
-async function fetchTodayDSREmails(token: string): Promise<GraphMessage[]> {
-  const today = todayIso();
-  // KQL: subject keyword + received today
-  const search = encodeURIComponent(`subject:${SUBJECT_SEARCH} received:${today}`);
+async function fetchDSREmailsForDate(token: string, date: string): Promise<GraphMessage[]> {
+  // KQL: subject keyword + received on given date
+  const search = encodeURIComponent(`subject:${SUBJECT_SEARCH} received:${date}`);
   const url =
     `https://graph.microsoft.com/v1.0/users/${MAILBOX}/messages` +
-    `?$search="${search}"&$select=id,subject,receivedDateTime,from&$top=100`;
+    `?$search="${search}"&$select=id,subject,receivedDateTime,from&$top=200`;
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
@@ -65,16 +64,17 @@ async function fetchTodayDSREmails(token: string): Promise<GraphMessage[]> {
   const data = await res.json();
   const all: GraphMessage[] = data.value ?? [];
 
-  // Guard: subject must contain keyword, and received today
+  // Guard: subject must contain keyword, and received on that date
   return all.filter((m) => {
     const subjectMatch = m.subject?.toLowerCase().includes(SUBJECT_KEYWORD.toLowerCase());
-    const dateMatch    = m.receivedDateTime?.startsWith(today);
+    const dateMatch    = m.receivedDateTime?.startsWith(date);
     return subjectMatch && dateMatch;
   });
 }
 
-// ── GET — sync today's DSRs, return all STP WIP NJs with today's DSR status ──
-// ?njId=X  →  return full submission history for that NJ (no sync)
+// ── GET — sync DSRs for a date (default: today), return all STP WIP NJs with DSR status ──
+// ?njId=X        →  return full submission history for that NJ (no sync)
+// ?date=YYYY-MM-DD →  sync & return for a specific past date (admin backfill)
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -95,7 +95,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const today = todayIso();
+    const dateParam = req.nextUrl.searchParams.get("date");
+    const today = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayIso();
 
     // 1. Get all active NJs that have an email (only STP WIP check is done on client for display)
     const allNJs = await db
@@ -109,9 +110,9 @@ export async function GET(req: NextRequest) {
       if (nj.email) njsByEmail.set(nj.email.toLowerCase(), nj);
     }
 
-    // 2. Fetch today's emails from mailbox
+    // 2. Fetch emails from mailbox for target date
     const token    = await getGraphToken();
-    const messages = await fetchTodayDSREmails(token);
+    const messages = await fetchDSREmailsForDate(token, today);
 
     // 3. Upsert DSR submissions for matched NJs
     for (const msg of messages) {
