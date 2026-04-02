@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     .where(eq(newJoiners.isActive, true))
     .all();
 
-  const valid = activeNJs.filter(n => n.empId && !n.empId.startsWith("MOCK-") && n.name?.trim());
+  const realNJs = activeNJs.filter(n => n.empId && !n.empId.startsWith("MOCK-") && n.name?.trim());
 
   const allAlerts     = await db.select().from(performanceAlerts).all();
   const todayHuddles  = await db.select().from(huddleLogs).where(eq(huddleLogs.date, today)).all();
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   const adminItems: IssueRow[] = [];
   const managerMap = new Map<string, IssueRow[]>(); // managerId → items
 
-  for (const nj of valid) {
+  for (const nj of realNJs) {
     const issues: string[] = [];
     if (!huddleSet.has(nj.id)) issues.push("Huddle not completed");
     if (!dsrSet.has(nj.id))    issues.push("DSR not submitted");
