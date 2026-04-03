@@ -161,9 +161,10 @@ function buildHtml(d: ReportData): string {
   const huddleCount = pastDates.filter(dt => huddleCompleted.has(dt)).length;
   const dsrCount    = pastDates.filter(dt => dsrSubmitted.has(dt)).length;
   const qDates      = windowDates.filter(dt => qubitDone.has(dt));
-  const latestQ     = qDates.length ? qubitsByDate.get(qDates[qDates.length - 1])! : null;
-  const avgQ        = qDates.length
-    ? Math.round(qDates.reduce((s, dt) => s + qubitsByDate.get(dt)!, 0) / qDates.length * 10) / 10
+  const qDatesWithScore = qDates.filter(dt => qubitsByDate.has(dt));
+  const latestQ     = qDatesWithScore.length ? qubitsByDate.get(qDatesWithScore[qDatesWithScore.length - 1]) ?? null : null;
+  const avgQ        = qDatesWithScore.length
+    ? Math.round(qDatesWithScore.reduce((s, dt) => s + (qubitsByDate.get(dt) ?? 0), 0) / qDatesWithScore.length * 10) / 10
     : null;
 
   let phaseLabel = ""; let phaseColor = "#3b82f6";
@@ -413,8 +414,12 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  try {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  if (!CLIENT_SECRET) return NextResponse.json({ error: "OUTLOOK_CLIENT_SECRET not configured" }, { status: 500 });
+  if (!MAILBOX)       return NextResponse.json({ error: "OUTLOOK_MAILBOX not configured" }, { status: 500 });
 
   const { id } = await params;
   const njId = parseInt(id, 10);
@@ -497,9 +502,6 @@ export async function POST(
     latestAssessment,
   });
 
-  if (!CLIENT_SECRET || !MAILBOX)
-    return NextResponse.json({ error: "Graph credentials not configured" }, { status: 500 });
-
   const token = await getGraphToken();
 
   const mailRes = await fetch(
@@ -524,4 +526,9 @@ export async function POST(
   }
 
   return NextResponse.json({ ok: true, to: recipients, subject: `STP Progress Report — ${nj.name}` });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[email-report] error:", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
