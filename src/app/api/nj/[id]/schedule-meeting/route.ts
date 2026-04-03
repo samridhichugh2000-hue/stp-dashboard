@@ -52,13 +52,14 @@ export async function POST(
     if (!nj) return NextResponse.json({ error: "NJ not found" }, { status: 404 });
 
     const body = await req.json() as {
-      meetingType:  string;
-      scheduledAt:  string; // ISO datetime "YYYY-MM-DDTHH:MM:00"
-      durationMins: number;
+      meetingType:    string;
+      scheduledAt:    string; // ISO datetime "YYYY-MM-DDTHH:MM:00"
+      durationMins:   number;
       extraAttendees?: string[];
+      rrule?:         string; // iCal RRULE for recurring meetings
     };
 
-    const { meetingType, scheduledAt, durationMins = 30, extraAttendees = [] } = body;
+    const { meetingType, scheduledAt, durationMins = 30, extraAttendees = [], rrule } = body;
 
     if (!meetingType || !scheduledAt)
       return NextResponse.json({ error: "meetingType and scheduledAt are required" }, { status: 400 });
@@ -76,12 +77,13 @@ export async function POST(
     ].filter((e, i, a) => e && a.indexOf(e) === i); // unique, non-empty
 
     const MEETING_LABELS: Record<string, string> = {
+      DailyHuddle:  "Daily Huddle",
       Phase1Review: "End-of-Phase-1 Manager Huddle",
-      Month1Review: "Month 1 STP Review",
+      Month1Review: "Month 1 STP Review Meeting",
       PA:           "PA Review Meeting",
       PIP:          "PIP Review Meeting",
       EXIT:         "Exit Review Meeting",
-      AdHoc:        "Ad-hoc STP Meeting",
+      AdHoc:        "Ad-hoc Meeting",
     };
     const label   = MEETING_LABELS[meetingType] ?? meetingType;
     const subject = `${label} — ${nj.name}`;
@@ -105,6 +107,7 @@ export async function POST(
       timeZone:        "India Standard Time",
       attendees,
       isOnlineMeeting: true,
+      ...(rrule ? { rrule } : {}),
     });
 
     const [saved] = await db.insert(meetingLogs).values({

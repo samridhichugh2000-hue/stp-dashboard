@@ -1,8 +1,8 @@
 /**
  * Microsoft Graph API utility
  * Uses Client Credentials flow (app-level, no user login required)
- * Permissions needed on Azure AD app:
- *   Mail.Send, Calendars.ReadWrite (Application permissions)
+ * Permissions needed on Azure AD app (Application type, admin consent granted):
+ *   Mail.Send, Calendars.ReadWrite
  */
 
 // Fall back to OUTLOOK_ vars if TEAMS_ vars are not separately configured
@@ -78,100 +78,122 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
   }
 }
 
-// ── Calendar ──────────────────────────────────────────────────────────────────
-// Uses iCalendar (.ics) email invite — only requires Mail.Send, no Calendars permission.
+// ── Calendar / Teams Meeting ───────────────────────────────────────────────────
+// Uses POST /users/{id}/events with isOnlineMeeting:true
+// Permissions needed: Calendars.ReadWrite (Application, admin consent)
+// Graph creates the real Teams meeting and sends proper calendar invites to attendees.
+// We also send a separate custom HTML notification email.
 
 export interface CalendarEventPayload {
-  subject:      string;
-  bodyHtml:     string;
-  startIso:     string; // "YYYY-MM-DDTHH:MM:00" in IST
-  endIso:       string;
-  timeZone?:    string;
-  attendees:    string[];
+  subject:          string;
+  bodyHtml:         string;
+  startIso:         string; // "YYYY-MM-DDTHH:MM:00" in IST
+  endIso:           string;
+  timeZone?:        string;
+  attendees:        string[];
   isOnlineMeeting?: boolean;
+  rrule?:           string; // "FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR;COUNT=10" or "FREQ=WEEKLY;COUNT=10"
 }
 
 export interface CreatedEvent {
-  id:          string;
-  joinUrl:     string | null;
-  webLink:     string;
+  id:      string;
+  joinUrl: string | null;
+  webLink: string;
 }
 
-function toICalDateTime(isoIST: string): string {
-  // Convert IST datetime to UTC and format as iCal YYYYMMDDTHHMMSSZ
-  const d = new Date(isoIST + "+05:30");
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
-}
+/** Convert RRULE string → Graph recurrence object */
+function buildRecurrence(rrule: string, startDateISO: string) {
+  const count = Number(rrule.match(/COUNT=(\d+)/)?.[1] ?? 10);
+  const freq  = /FREQ=DAILY/.test(rrule) ? "daily" : "weekly";
+  const startDate = startDateISO.slice(0, 10); // "YYYY-MM-DD"
 
-function buildICS(payload: CalendarEventPayload, uid: string): string {
-  const now   = toICalDateTime(new Date().toISOString().slice(0, 19));
-  const start = toICalDateTime(payload.startIso);
-  const end   = toICalDateTime(payload.endIso);
-  const desc  = payload.bodyHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 500);
-
-  const attendeeLines = payload.attendees
-    .map(e => `ATTENDEE;RSVP=TRUE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION:MAILTO:${e}`)
-    .join("\r\n");
-
-  return [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//STP Dashboard//EN",
-    "METHOD:REQUEST",
-    "BEGIN:VEVENT",
-    `UID:${uid}@stp-dashboard`,
-    `DTSTAMP:${now}`,
-    `DTSTART:${start}`,
-    `DTEND:${end}`,
-    `SUMMARY:${payload.subject}`,
-    `DESCRIPTION:${desc}`,
-    `ORGANIZER:MAILTO:${SENDER_EMAIL}`,
-    attendeeLines,
-    "STATUS:CONFIRMED",
-    "END:VEVENT",
-    "END:VCALENDAR",
-  ].join("\r\n");
+  return {
+    pattern: freq === "daily"
+      ? { type: "weekly", interval: 1, daysOfWeek: ["monday","tuesday","wednesday","thursday","friday"] }
+      : { type: "weekly", interval: 1 },
+    range: { type: "numbered", startDate, numberOfOccurrences: count },
+  };
 }
 
 export async function createCalendarEvent(
   payload: CalendarEventPayload
 ): Promise<CreatedEvent> {
-  const uid   = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const ics   = buildICS(payload, uid);
-  const icsB64 = Buffer.from(ics).toString("base64");
-
+  // Fresh token every call so permission changes take effect immediately
+  cachedToken = null; tokenExpiry = 0;
   const token = await getGraphToken();
 
-  const message = {
+  const tz        = payload.timeZone ?? "India Standard Time";
+  const startDT   = new Date(payload.startIso + "+05:30").toISOString();
+  const endDT     = new Date(payload.endIso   + "+05:30").toISOString();
+
+  const eventBody: Record<string, unknown> = {
     subject: payload.subject,
-    body: { contentType: "HTML", content: payload.bodyHtml },
-    toRecipients: payload.attendees.map(e => ({ emailAddress: { address: e } })),
-    attachments: [
-      {
-        "@odata.type":  "#microsoft.graph.fileAttachment",
-        name:           "invite.ics",
-        contentType:    "text/calendar; method=REQUEST",
-        contentBytes:   icsB64,
-      },
-    ],
+    body:    { contentType: "HTML", content: payload.bodyHtml },
+    start:   { dateTime: startDT, timeZone: tz },
+    end:     { dateTime: endDT,   timeZone: tz },
+    attendees: payload.attendees.map(e => ({
+      emailAddress: { address: e },
+      type: "required",
+    })),
+    isOnlineMeeting:       true,
+    onlineMeetingProvider: "teamsForBusiness",
+    allowNewTimeProposals: false,
   };
 
-  const res = await fetch(`${GRAPH_URL}/users/${SENDER_EMAIL}/sendMail`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ message, saveToSentItems: true }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`createCalendarEvent failed: ${err}`);
+  if (payload.rrule) {
+    eventBody.recurrence = buildRecurrence(payload.rrule, payload.startIso);
   }
 
-  // sendMail returns 202 with no body
-  return {
-    id:      uid,
-    joinUrl: null,
-    webLink: "",
+  // Step 1: Create calendar event → Graph sends proper Teams invite to all attendees
+  const evtRes = await fetch(`${GRAPH_URL}/users/${SENDER_EMAIL}/events`, {
+    method: "POST",
+    headers: {
+      Authorization:  `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(eventBody),
+  });
+
+  if (!evtRes.ok) {
+    const err = await evtRes.text();
+    throw new Error(`createCalendarEvent failed (${evtRes.status}): ${err}`);
+  }
+
+  const evtData = await evtRes.json() as {
+    id:      string;
+    webLink: string;
+    onlineMeeting?: { joinUrl?: string };
   };
+
+  const eventId = evtData.id;
+  const joinUrl = evtData.onlineMeeting?.joinUrl ?? null;
+  const webLink = evtData.webLink ?? "";
+
+  // Step 2: Send our custom notification email with the Teams join link
+  // (Graph already sent the standard calendar invite; this is the NJ-details notification)
+  const joinSection = joinUrl
+    ? `<div style="margin:20px 0;padding:16px 20px;background:#f5f5f5;border-left:4px solid #6264a7;font-family:'Segoe UI',sans-serif">
+        <div style="font-size:14px;font-weight:600;color:#252424;margin-bottom:10px">Microsoft Teams meeting</div>
+        <a href="${joinUrl}" style="display:inline-block;background:#6264a7;color:#ffffff;font-size:13px;font-weight:600;padding:8px 20px;border-radius:4px;text-decoration:none">Join</a>
+      </div>`
+    : "";
+
+  const notifMessage = {
+    subject: payload.subject,
+    body:    { contentType: "HTML", content: `${payload.bodyHtml}${joinSection}` },
+    toRecipients: payload.attendees.map(e => ({ emailAddress: { address: e } })),
+  };
+
+  const mailRes = await fetch(`${GRAPH_URL}/users/${SENDER_EMAIL}/sendMail`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ message: notifMessage, saveToSentItems: false }),
+  });
+
+  if (!mailRes.ok) {
+    // Don't fail the whole thing — event is already created
+    console.error("[msGraph] notification email failed:", await mailRes.text());
+  }
+
+  return { id: eventId, joinUrl, webLink };
 }
