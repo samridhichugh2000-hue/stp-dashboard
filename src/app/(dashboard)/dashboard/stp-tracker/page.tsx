@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import type { NJ, PerformanceAlert } from "@/lib/types";
-import { Activity, Search, User, CalendarDays, Clock, ChevronRight, Flag, FlagOff, Maximize2, Minimize2, Mail, Send, X } from "lucide-react";
+import { Activity, Search, User, CalendarDays, Clock, ChevronRight, Flag, FlagOff, Maximize2, Minimize2, Mail, Send, X, Video, ExternalLink } from "lucide-react";
 import { fmtTenure } from "@/lib/formatTenure";
 import { clsx } from "clsx";
 import { useSession } from "next-auth/react";
@@ -92,6 +92,16 @@ const STATUS_DOT: Record<STPStatus, string> = {
 // ── component ──────────────────────────────────────────────────────────────────
 
 type WIPModalState = { nj: NJ & { wds: number; status: STPStatus }; marking: boolean } | null;
+
+interface MeetingLog {
+  id: number;
+  meetingType: string;
+  scheduledAt: string;
+  subject: string;
+  status: string;
+  teamsJoinUrl: string | null;
+  durationMins: number;
+}
 
 export default function STPTrackerPage() {
   const { data: session } = useSession();
@@ -593,13 +603,50 @@ function STPDrawer({
   nj: NJ & { wds: number; status: STPStatus };
   onClose: () => void;
 }) {
-  const [expanded,    setExpanded]    = useState(false);
-  const [emailModal,  setEmailModal]  = useState(false);
-  const [recipients,  setRecipients]  = useState<string[]>([]);
-  const [inputVal,    setInputVal]    = useState("");
-  const [sending,     setSending]     = useState(false);
-  const [sent,        setSent]        = useState<string[] | null>(null);
-  const [sendError,   setSendError]   = useState<string | null>(null);
+  const [expanded,      setExpanded]      = useState(false);
+  const [emailModal,    setEmailModal]    = useState(false);
+  const [recipients,    setRecipients]    = useState<string[]>([]);
+  const [inputVal,      setInputVal]      = useState("");
+  const [sending,       setSending]       = useState(false);
+  const [sent,          setSent]          = useState<string[] | null>(null);
+  const [sendError,     setSendError]     = useState<string | null>(null);
+
+  // Meeting state
+  const [meetingModal,  setMeetingModal]  = useState(false);
+  const [meetings,      setMeetings]      = useState<MeetingLog[] | null>(null);
+  const [meetingType,   setMeetingType]   = useState("AdHoc");
+  const [meetingDate,   setMeetingDate]   = useState("");
+  const [meetingTime,   setMeetingTime]   = useState("15:00");
+  const [meetingDur,    setMeetingDur]    = useState(30);
+  const [meetingSaving, setMeetingSaving] = useState(false);
+  const [meetingError,  setMeetingError]  = useState<string | null>(null);
+  const [meetingDone,   setMeetingDone]   = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/nj/${nj.id}/schedule-meeting`)
+      .then(r => r.json())
+      .then(d => setMeetings(Array.isArray(d) ? d : []))
+      .catch(() => setMeetings([]));
+  }, [nj.id]);
+
+  const handleScheduleMeeting = async () => {
+    if (!meetingDate || !meetingTime) return;
+    setMeetingSaving(true); setMeetingError(null); setMeetingDone(null);
+    const scheduledAt = `${meetingDate}T${meetingTime}:00`;
+    const res = await fetch(`/api/nj/${nj.id}/schedule-meeting`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meetingType, scheduledAt, durationMins: meetingDur }),
+    });
+    const data = await res.json();
+    setMeetingSaving(false);
+    if (res.ok) {
+      setMeetingDone(data.joinUrl ?? "Scheduled");
+      setMeetings(prev => prev ? [data.meeting, ...prev] : [data.meeting]);
+    } else {
+      setMeetingError(data.error ?? "Failed to schedule");
+    }
+  };
 
   const addRecipient = (raw: string) => {
     const emails = raw.split(/[\s,;]+/).map(e => e.trim()).filter(e => e.includes("@"));
@@ -653,6 +700,13 @@ function STPDrawer({
             className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
           >
             {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
+          <button
+            onClick={() => { setMeetingModal(true); setMeetingDone(null); setMeetingError(null); }}
+            title="Schedule meeting"
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+          >
+            <Video size={13} /> Schedule
           </button>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
             <X size={15} />
@@ -713,13 +767,165 @@ function STPDrawer({
           />
         </div>
 
-        {/* Right column (expanded) or continued single column: task tracker + assessment */}
+        {/* Right column (expanded) or continued single column: task tracker + assessment + meetings */}
         <div className="space-y-4">
           <DayWiseTaskTracker njId={nj.id} joinDate={nj.joinDate} />
           <AssessmentChecklist njId={nj.id} njName={nj.name} />
+
+          {/* Meeting History */}
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Video size={14} className="text-emerald-500" />
+                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Meetings</p>
+                {meetings && meetings.length > 0 && (
+                  <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">{meetings.length}</span>
+                )}
+              </div>
+            </div>
+            {meetings === null ? (
+              <div className="p-4 space-y-2">
+                {[...Array(2)].map((_, i) => <div key={i} className="animate-pulse h-8 bg-gray-100 rounded-lg" />)}
+              </div>
+            ) : meetings.length === 0 ? (
+              <div className="px-4 py-6 text-center text-xs text-gray-400">No meetings scheduled yet</div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {meetings.map(m => (
+                  <div key={m.id} className="flex items-center gap-3 px-4 py-2.5">
+                    <div className={clsx(
+                      "w-2 h-2 rounded-full flex-shrink-0",
+                      m.status === "Scheduled"  && "bg-blue-400",
+                      m.status === "Completed"  && "bg-emerald-400",
+                      m.status === "Cancelled"  && "bg-gray-300",
+                    )} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-gray-700 truncate">{m.subject}</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">
+                        {new Date(m.scheduledAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        {" · "}{m.durationMins} min · {m.status}
+                      </div>
+                    </div>
+                    {m.teamsJoinUrl && (
+                      <a href={m.teamsJoinUrl} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:underline flex-shrink-0"
+                      >
+                        <ExternalLink size={10} /> Join
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
+
+    {/* Schedule Meeting Modal */}
+    {meetingModal && (
+      <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                <Video size={15} className="text-emerald-600" />
+              </div>
+              <div>
+                <div className="font-bold text-gray-900 text-sm">Schedule Meeting</div>
+                <div className="text-[11px] text-gray-400">{nj.name}</div>
+              </div>
+            </div>
+            <button onClick={() => setMeetingModal(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+          </div>
+
+          {meetingDone ? (
+            <div className="text-center py-4">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-3">
+                <Video size={20} className="text-emerald-600" />
+              </div>
+              <p className="text-sm font-semibold text-gray-800">Meeting scheduled!</p>
+              {meetingDone !== "Scheduled" && (
+                <a href={meetingDone} target="_blank" rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center gap-1 text-xs text-indigo-600 hover:underline"
+                >
+                  <ExternalLink size={11} /> Join Teams Meeting
+                </a>
+              )}
+              <button onClick={() => { setMeetingModal(false); setMeetingDone(null); }}
+                className="mt-4 block mx-auto text-xs text-gray-400 hover:underline"
+              >Close</button>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3 mb-4">
+                <div>
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Meeting Type</label>
+                  <select
+                    value={meetingType}
+                    onChange={e => setMeetingType(e.target.value)}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  >
+                    <option value="Phase1Review">End-of-Phase-1 Manager Huddle</option>
+                    <option value="Month1Review">Month 1 STP Review</option>
+                    <option value="PA">PA Review Meeting</option>
+                    <option value="PIP">PIP Review Meeting</option>
+                    <option value="EXIT">Exit Review Meeting</option>
+                    <option value="AdHoc">Ad-hoc Meeting</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Date</label>
+                    <input type="date" value={meetingDate} onChange={e => setMeetingDate(e.target.value)}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Time (IST)</label>
+                    <input type="time" value={meetingTime} onChange={e => setMeetingTime(e.target.value)}
+                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">Duration</label>
+                  <select value={meetingDur} onChange={e => setMeetingDur(Number(e.target.value))}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  >
+                    <option value={15}>15 minutes</option>
+                    <option value={30}>30 minutes</option>
+                    <option value={45}>45 minutes</option>
+                    <option value={60}>1 hour</option>
+                  </select>
+                </div>
+              </div>
+
+              {meetingError && (
+                <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{meetingError}</p>
+              )}
+
+              <div className="flex gap-2">
+                <button onClick={() => setMeetingModal(false)}
+                  className="flex-1 py-2 text-xs font-semibold rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+                >Cancel</button>
+                <button
+                  onClick={handleScheduleMeeting}
+                  disabled={meetingSaving || !meetingDate}
+                  className={clsx(
+                    "flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg text-white transition-colors",
+                    meetingSaving || !meetingDate ? "bg-emerald-300 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
+                  )}
+                >
+                  <Video size={12} />
+                  {meetingSaving ? "Scheduling…" : "Schedule"}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    )}
 
     {/* Email Report Modal */}
     {emailModal && (
