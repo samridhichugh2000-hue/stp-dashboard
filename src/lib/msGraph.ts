@@ -79,14 +79,15 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 }
 
 // ── Calendar ──────────────────────────────────────────────────────────────────
+// Uses iCalendar (.ics) email invite — only requires Mail.Send, no Calendars permission.
 
 export interface CalendarEventPayload {
   subject:      string;
   bodyHtml:     string;
-  startIso:     string; // e.g. "2026-04-10T10:00:00"
+  startIso:     string; // "YYYY-MM-DDTHH:MM:00" in IST
   endIso:       string;
-  timeZone?:    string; // default "India Standard Time"
-  attendees:    string[]; // email addresses
+  timeZone?:    string;
+  attendees:    string[];
   isOnlineMeeting?: boolean;
 }
 
@@ -96,32 +97,70 @@ export interface CreatedEvent {
   webLink:     string;
 }
 
+function toICalDateTime(isoIST: string): string {
+  // Convert IST datetime to UTC and format as iCal YYYYMMDDTHHMMSSZ
+  const d = new Date(isoIST + "+05:30");
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+}
+
+function buildICS(payload: CalendarEventPayload, uid: string): string {
+  const now   = toICalDateTime(new Date().toISOString().slice(0, 19));
+  const start = toICalDateTime(payload.startIso);
+  const end   = toICalDateTime(payload.endIso);
+  const desc  = payload.bodyHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 500);
+
+  const attendeeLines = payload.attendees
+    .map(e => `ATTENDEE;RSVP=TRUE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION:MAILTO:${e}`)
+    .join("\r\n");
+
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//STP Dashboard//EN",
+    "METHOD:REQUEST",
+    "BEGIN:VEVENT",
+    `UID:${uid}@stp-dashboard`,
+    `DTSTAMP:${now}`,
+    `DTSTART:${start}`,
+    `DTEND:${end}`,
+    `SUMMARY:${payload.subject}`,
+    `DESCRIPTION:${desc}`,
+    `ORGANIZER:MAILTO:${SENDER_EMAIL}`,
+    attendeeLines,
+    "STATUS:CONFIRMED",
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+}
+
 export async function createCalendarEvent(
   payload: CalendarEventPayload
 ): Promise<CreatedEvent> {
-  const token = await getGraphToken();
-  const tz = payload.timeZone ?? "India Standard Time";
+  const uid   = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const ics   = buildICS(payload, uid);
+  const icsB64 = Buffer.from(ics).toString("base64");
 
-  const body = {
+  const token = await getGraphToken();
+
+  const message = {
     subject: payload.subject,
-    body:    { contentType: "HTML", content: payload.bodyHtml },
-    start:   { dateTime: payload.startIso, timeZone: tz },
-    end:     { dateTime: payload.endIso,   timeZone: tz },
-    attendees: payload.attendees.map(e => ({
-      emailAddress: { address: e },
-      type: "required",
-    })),
-    isOnlineMeeting:       payload.isOnlineMeeting ?? true,
-    onlineMeetingProvider: "teamsForBusiness",
+    body: { contentType: "HTML", content: payload.bodyHtml },
+    toRecipients: payload.attendees.map(e => ({ emailAddress: { address: e } })),
+    attachments: [
+      {
+        "@odata.type":  "#microsoft.graph.fileAttachment",
+        name:           "invite.ics",
+        contentType:    "text/calendar; method=REQUEST",
+        contentBytes:   icsB64,
+      },
+    ],
   };
 
-  const res = await fetch(`${GRAPH_URL}/users/${SENDER_EMAIL}/events`, {
+  const res = await fetch(`${GRAPH_URL}/users/${SENDER_EMAIL}/sendMail`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ message, saveToSentItems: true }),
   });
 
   if (!res.ok) {
@@ -129,15 +168,10 @@ export async function createCalendarEvent(
     throw new Error(`createCalendarEvent failed: ${err}`);
   }
 
-  const data = await res.json() as {
-    id: string;
-    webLink: string;
-    onlineMeeting?: { joinUrl?: string };
-  };
-
+  // sendMail returns 202 with no body
   return {
-    id:      data.id,
-    joinUrl: data.onlineMeeting?.joinUrl ?? null,
-    webLink: data.webLink,
+    id:      uid,
+    joinUrl: null,
+    webLink: "",
   };
 }
