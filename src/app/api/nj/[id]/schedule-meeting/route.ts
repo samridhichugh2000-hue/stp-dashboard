@@ -78,7 +78,7 @@ export async function POST(
 
     const MEETING_LABELS: Record<string, string> = {
       DailyHuddle:  "Daily Huddle",
-      Phase1Review: "End-of-Phase-1 Manager Huddle",
+      Phase1Review: "STP Evaluation - Manager Huddle",
       Month1Review: "Month 1 STP Review Meeting",
       PA:           "PA Review Meeting",
       PIP:          "PIP Review Meeting",

@@ -27,6 +27,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     }
   }, [status, session, pathname, router]);
 
+  // Auto-sync data on dashboard load (4-hour cooldown, fires in background)
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetch("/api/sync/auto", { method: "POST" }).catch(() => {});
+    }
+  }, [status]);
+
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center"

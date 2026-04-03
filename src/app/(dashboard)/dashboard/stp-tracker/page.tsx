@@ -1013,7 +1013,7 @@ function STPDrawer({
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { value: "DailyHuddle",  label: "Daily Huddle",                   icon: "🤝" },
-                    { value: "Phase1Review", label: "End-of-Phase-1 Manager Huddle",  icon: "🏁" },
+                    { value: "Phase1Review", label: "STP Evaluation - Manager Huddle", icon: "🏁" },
                     { value: "Month1Review", label: "Month 1 Review Meeting",          icon: "📅" },
                     { value: "AdHoc",        label: "Ad-hoc Meeting",                  icon: "💬" },
                   ].map(opt => (

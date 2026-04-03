@@ -66,7 +66,7 @@ interface Milestone {
 const MILESTONES: Milestone[] = [
   {
     type: "Phase1Review",
-    label: "End-of-Phase-1 Manager Huddle",
+    label: "STP Evaluation - Manager Huddle",
     durationMins: 30,
     requiresAlert: null,
     dateFor: (j) => getWorkingDayDate(j, 14),
