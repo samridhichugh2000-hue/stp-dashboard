@@ -5,10 +5,11 @@
  *   Mail.Send, Calendars.ReadWrite (Application permissions)
  */
 
-const TENANT_ID     = process.env.TEAMS_TENANT_ID!;
-const CLIENT_ID     = process.env.TEAMS_CLIENT_ID!;
-const CLIENT_SECRET = process.env.TEAMS_CLIENT_SECRET!;
-const SENDER_EMAIL  = process.env.TEAMS_CALENDAR_OWNER_EMAIL!;
+// Fall back to OUTLOOK_ vars if TEAMS_ vars are not separately configured
+const TENANT_ID     = process.env.TEAMS_TENANT_ID     ?? process.env.OUTLOOK_TENANT_ID    ?? "98deb14a-8f2f-48b2-807f-8a97c96a0ca3";
+const CLIENT_ID     = process.env.TEAMS_CLIENT_ID     ?? process.env.OUTLOOK_CLIENT_ID    ?? "dcb6ce18-d8cb-4cb1-a96c-86005af9d5b2";
+const CLIENT_SECRET = process.env.TEAMS_CLIENT_SECRET ?? process.env.OUTLOOK_CLIENT_SECRET ?? "";
+const SENDER_EMAIL  = process.env.TEAMS_CALENDAR_OWNER_EMAIL ?? process.env.OUTLOOK_MAILBOX ?? "";
 
 const TOKEN_URL = `https://login.microsoftonline.com/${TENANT_ID}/oauth2/v2.0/token`;
 const GRAPH_URL = "https://graph.microsoft.com/v1.0";
