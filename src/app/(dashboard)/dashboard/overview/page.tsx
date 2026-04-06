@@ -63,6 +63,8 @@ type FilterOption = DisplayCategory | "All" | "Active";
 
 function getDisplayCategory(nj: NJ): DisplayCategory {
   if (!nj.isActive) return "Inactive";
+  // Hard cutoff: after 4 calendar months, always reflect actual status regardless of STP state
+  if (calendarMonthsSince(nj.joinDate) >= 4) return nj.hasPositiveNR ? "Developed" : "Not Developed"; // 4+ months → actual status
   if (nj.stpClosed) return nj.hasPositiveNR ? "Developed" : "Not Developed"; // STP closed by admin
   const wds = workingDaysSince(nj.joinDate);
   if (wds <= 14) return "STP WIP";                              // Standard 14-day window
@@ -96,6 +98,12 @@ function workingDaysSince(dojISO: string): number {
     d.setDate(d.getDate() + 1);
   }
   return count;
+}
+
+function calendarMonthsSince(dojISO: string): number {
+  const doj = new Date(dojISO);
+  const now = new Date();
+  return (now.getFullYear() - doj.getFullYear()) * 12 + (now.getMonth() - doj.getMonth());
 }
 
 function fmtDOJ(iso: string) {

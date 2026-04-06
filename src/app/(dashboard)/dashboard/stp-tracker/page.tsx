@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import type { NJ, PerformanceAlert } from "@/lib/types";
-import { Activity, Search, User, CalendarDays, Clock, ChevronRight, Flag, FlagOff, Maximize2, Minimize2, Mail, Send, X, Video, ExternalLink, Repeat2 } from "lucide-react";
+import { Activity, Search, User, CalendarDays, Clock, ChevronRight, Flag, FlagOff, Maximize2, Minimize2, Mail, Send, X, Video, ExternalLink, Repeat2, AlertTriangle, CheckCircle2, Users, MapPin, LayoutGrid, List } from "lucide-react";
+const MailIcon = Mail;
 import { fmtTenure } from "@/lib/formatTenure";
 import { clsx } from "clsx";
 import { useSession } from "next-auth/react";
@@ -26,6 +27,12 @@ function workingDaysSince(dojISO: string): number {
     d.setDate(d.getDate() + 1);
   }
   return count;
+}
+
+function calendarMonthsSince(dojISO: string): number {
+  const doj = new Date(dojISO);
+  const now = new Date();
+  return (now.getFullYear() - doj.getFullYear()) * 12 + (now.getMonth() - doj.getMonth());
 }
 
 function fmtDate(iso: string) {
@@ -110,6 +117,7 @@ export default function STPTrackerPage() {
   const [njs,      setNjs]      = useState<NJ[] | null>(null);
   const [alerts,   setAlerts]   = useState<PerformanceAlert[]>([]);
   const [search,   setSearch]   = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedNJ, setSelectedNJ] = useState<(NJ & { wds: number; status: STPStatus }) | null>(null);
   const [wipModal,   setWipModal]   = useState<WIPModalState>(null);
   const [wipNote,    setWipNote]    = useState("");
@@ -175,8 +183,11 @@ export default function STPTrackerPage() {
 
   if (njs === null) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400 text-sm">
-        Loading STP Tracker...
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-gray-400">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-400 to-fuchsia-500 flex items-center justify-center animate-pulse">
+          <Activity size={20} className="text-white" />
+        </div>
+        <p className="text-sm font-medium">Loading STP Tracker…</p>
       </div>
     );
   }
@@ -190,7 +201,10 @@ export default function STPTrackerPage() {
       return { ...nj, wds, status };
     });
 
-  const stpNJs = withWds.filter((nj) => !nj.stpClosed);
+  // Active in STP: not yet closed AND within 4-month observation window
+  const stpNJs = withWds.filter((nj) =>
+    !nj.stpClosed && calendarMonthsSince(nj.joinDate) < 4
+  );
 
   const filtered = stpNJs.filter((nj) => {
     if (!search) return true;
@@ -202,51 +216,119 @@ export default function STPTrackerPage() {
     );
   });
 
-  // Completed NJs (stpClosed, active)
-  const completedNJs = withWds.filter((nj) => nj.stpClosed);
+  // Completed: explicitly closed by admin, OR auto-graduated past 4 months
+  const completedNJs = withWds.filter((nj) =>
+    nj.stpClosed || calendarMonthsSince(nj.joinDate) >= 4
+  );
 
   // KPI counts
   const phase1Count = stpNJs.filter((n) => n.status === "Phase 1 — Training").length;
   const phase2Count = stpNJs.filter((n) => n.status === "Phase 2 — Extended").length;
 
+  const wipCount = stpNJs.filter((n) => n.stpWipMarked).length;
+
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-6 min-h-screen bg-slate-50">
       {/* Header */}
+      <div className="rounded-2xl bg-gradient-to-br from-purple-600 via-fuchsia-600 to-indigo-700 p-6 text-white shadow-lg">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-inner">
+              <Activity size={24} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">STP Tracker</h1>
+              <p className="text-purple-200 text-sm mt-0.5">Sales Training Programme · Active NJ monitoring</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <span className="bg-white/15 backdrop-blur-sm text-white text-xs font-semibold px-3 py-1.5 rounded-full border border-white/20">
+              {stpNJs.length} Active
+            </span>
+            {completedNJs.length > 0 && (
+              <span className="bg-emerald-400/25 text-emerald-100 text-xs font-semibold px-3 py-1.5 rounded-full border border-emerald-300/30">
+                {completedNJs.length} Completed
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Stats row */}
+        <div className="grid grid-cols-2 gap-3 mt-5">
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3 border border-white/15">
+            <div className="flex items-center gap-2 mb-1">
+              <Users size={13} className="text-purple-200" />
+              <span className="text-purple-200 text-[11px] font-semibold uppercase tracking-wide">Total Active</span>
+            </div>
+            <div className="text-2xl font-bold">{stpNJs.length}</div>
+          </div>
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3 border border-white/15">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle size={13} className="text-yellow-200" />
+              <span className="text-yellow-200 text-[11px] font-semibold uppercase tracking-wide">WIP Flagged</span>
+            </div>
+            <div className="text-2xl font-bold">{wipCount}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search + view toggle toolbar */}
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-fuchsia-400 to-purple-600 flex items-center justify-center shadow-md">
-          <Activity size={20} className="text-white" />
+        <div className="relative flex-1">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, Emp ID, or manager…"
+            className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 shadow-sm"
+          />
+          {search && (
+            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X size={14} />
+            </button>
+          )}
         </div>
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">STP Tracker</h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Active NJs in Sales Training Programme · {stpNJs.length} tracked
-          </p>
+        {/* View toggle */}
+        <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1 shadow-sm gap-0.5">
+          <button
+            onClick={() => setViewMode("grid")}
+            className={clsx(
+              "p-2 rounded-lg transition-colors",
+              viewMode === "grid" ? "bg-indigo-600 text-white" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            )}
+            title="Grid view"
+          >
+            <LayoutGrid size={15} />
+          </button>
+          <button
+            onClick={() => setViewMode("list")}
+            className={clsx(
+              "p-2 rounded-lg transition-colors",
+              viewMode === "list" ? "bg-indigo-600 text-white" : "text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+            )}
+            title="List view"
+          >
+            <List size={15} />
+          </button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 gap-4 max-w-sm">
-        <KPICard label="Phase 1 — Training" value={phase1Count} color="blue"  />
-        <KPICard label="Phase 2 — Extended" value={phase2Count} color="amber" />
-      </div>
-
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, Emp ID, manager…"
-          className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-        />
-      </div>
-
-      {/* Board — STP WIP */}
+      {/* Board */}
+      {filtered.length > 0 && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-gray-700">Active NJs</span>
+          <span className="text-[11px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{filtered.length}</span>
+        </div>
+      )}
       {filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-400 text-sm">
-          No NJs currently in STP window
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
+            <Users size={24} className="text-gray-300" />
+          </div>
+          <p className="text-gray-500 font-medium text-sm">No NJs in STP window</p>
+          <p className="text-gray-400 text-xs mt-1">{search ? "Try a different search term" : "All NJs have completed their STP"}</p>
         </div>
-      ) : (
+      ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map((nj) => (
             <NJCard
@@ -261,6 +343,16 @@ export default function STPTrackerPage() {
             />
           ))}
         </div>
+      ) : (
+        <NJListView
+          njs={filtered}
+          isAdmin={isAdmin}
+          selectedId={selectedNJ?.id ?? null}
+          onSelect={(nj) => setSelectedNJ(selectedNJ?.id === nj.id ? null : nj)}
+          onWIPClick={(nj, marking) => { setWipModal({ nj, marking }); setWipNote(""); }}
+          onCloseSTP={(nj) => setCloseModal(nj)}
+          onProgressToggle={(nj, field, done) => handleProgressToggle(nj, field, done)}
+        />
       )}
 
       {/* STP Completed list */}
@@ -359,23 +451,6 @@ export default function STPTrackerPage() {
   );
 }
 
-// ── KPI Card ───────────────────────────────────────────────────────────────────
-
-const KPI_COLOR: Record<string, string> = {
-  blue:   "from-blue-50 to-blue-100 border-blue-200 text-blue-700",
-  amber:  "from-amber-50 to-amber-100 border-amber-200 text-amber-700",
-  orange: "from-orange-50 to-orange-100 border-orange-200 text-orange-700",
-  red:    "from-red-50 to-red-100 border-red-200 text-red-700",
-};
-
-function KPICard({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className={clsx("rounded-xl border p-4 bg-gradient-to-br", KPI_COLOR[color])}>
-      <div className="text-2xl font-bold">{value}</div>
-      <div className="text-xs font-medium mt-1 opacity-80">{label}</div>
-    </div>
-  );
-}
 
 // ── STP Completed Section ──────────────────────────────────────────────────────
 
@@ -391,16 +466,18 @@ function CompletedSection({
   const [open, setOpen] = useState(true);
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
       {/* Section header */}
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors"
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
       >
-        <div className="flex items-center gap-2.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
-          <span className="text-sm font-semibold text-gray-700">STP Completed</span>
-          <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+            <CheckCircle2 size={14} className="text-emerald-600" />
+          </div>
+          <span className="text-sm font-semibold text-gray-800">STP Completed</span>
+          <span className="text-[11px] font-bold bg-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-full border border-emerald-200">
             {njs.length}
           </span>
         </div>
@@ -448,6 +525,27 @@ function CompletedSection({
 
 // ── NJ Card ────────────────────────────────────────────────────────────────────
 
+// thin top accent per status
+const STATUS_ACCENT: Record<STPStatus, string> = {
+  "Phase 1 — Training": "before:bg-blue-500",
+  "Phase 2 — Extended": "before:bg-amber-400",
+  "Developed":          "before:bg-emerald-500",
+  "On PA":              "before:bg-orange-400",
+  "On PIP":             "before:bg-red-500",
+  "Exited":             "before:bg-gray-400",
+  "Not Developed":      "before:bg-rose-500",
+};
+
+const STATUS_BAR_COLOR: Record<STPStatus, string> = {
+  "Phase 1 — Training": "bg-blue-500",
+  "Phase 2 — Extended": "bg-amber-400",
+  "Developed":          "bg-emerald-500",
+  "On PA":              "bg-orange-400",
+  "On PIP":             "bg-red-500",
+  "Exited":             "bg-gray-400",
+  "Not Developed":      "bg-rose-500",
+};
+
 function NJCard({
   nj,
   onSelect,
@@ -465,6 +563,9 @@ function NJCard({
   onCloseSTP: () => void;
   onProgressToggle: (field: "managerHuddle" | "stpMetrics", done: boolean) => void;
 }) {
+  const progressPct = Math.min((nj.wds / 18) * 100, 100);
+  const bothDone    = !!nj.managerHuddleDone && !!nj.stpMetricsDone;
+
   return (
     <div
       onClick={onSelect}
@@ -472,123 +573,314 @@ function NJCard({
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelect(); }}
       className={clsx(
-        "text-left w-full rounded-xl border p-4 transition-all duration-200 hover:shadow-md cursor-pointer",
-        selected
-          ? "border-purple-400 bg-purple-50 shadow-md"
-          : "border-gray-200 bg-white hover:border-purple-200"
+        "text-left w-full rounded-2xl bg-white transition-all duration-200 cursor-pointer overflow-hidden",
+        selected ? "shadow-lg ring-2 ring-indigo-400/40" : "shadow-sm hover:shadow-md"
       )}
     >
-      {/* Top row */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+      {/* Thin status accent bar at top */}
+      <div className={clsx("h-1 w-full", STATUS_BAR_COLOR[nj.status])} />
+
+      <div className="p-4">
+        {/* Identity row */}
+        <div className="flex items-start justify-between gap-3">
+          {/* Avatar */}
+          <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-sm font-bold flex-shrink-0">
             {initials(nj.name)}
           </div>
-          <div>
-            <div className="font-semibold text-gray-900 text-sm leading-tight">{nj.name}</div>
-            <div className="text-xs text-gray-400 mt-0.5">{nj.empId ?? "—"}</div>
+
+          {/* Name + meta */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-gray-900 text-sm truncate">{nj.name}</span>
+              {nj.stpWipMarked && (
+                <span className="flex-shrink-0 flex items-center gap-0.5 text-[9px] font-bold bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                  <Flag size={7} /> WIP
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-gray-400">
+              <span>{nj.empId ?? "—"}</span>
+              {nj.designation && <><span>·</span><span className="truncate">{nj.designation}</span></>}
+            </div>
+          </div>
+
+          {/* Day badge */}
+          <div className="flex-shrink-0 text-right">
+            <div className="text-2xl font-black text-gray-800 leading-none">{nj.wds}</div>
+            <div className="text-[9px] text-gray-400 font-medium mt-0.5">/ 18 days</div>
           </div>
         </div>
-        <span
-          className={clsx(
-            "text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0",
+
+        {/* Status + manager row */}
+        <div className="mt-3 flex items-center justify-between">
+          <span className={clsx(
+            "text-[10px] font-semibold px-2 py-0.5 rounded-md border",
             STATUS_STYLE[nj.status]
-          )}
-        >
-          <span className={clsx("inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle", STATUS_DOT[nj.status])} />
-          {nj.status}
-        </span>
-      </div>
+          )}>
+            {nj.status}
+          </span>
+          <div className="flex items-center gap-1 text-[11px] text-gray-400">
+            <User size={10} className="flex-shrink-0" />
+            <span className="truncate max-w-[120px]">{nj.managerId}</span>
+          </div>
+        </div>
 
-      {/* Meta row */}
-      <div className="mt-3 grid grid-cols-3 gap-2 text-xs text-gray-500">
-        <div className="flex items-center gap-1">
-          <Clock size={11} className="text-gray-400" />
-          <span>Day <span className="font-semibold text-gray-700">{nj.wds}</span></span>
+        {/* Progress bar */}
+        <div className="mt-3">
+          <div className="flex justify-between text-[10px] text-gray-400 mb-1.5">
+            <span>Progress</span>
+            <span>{Math.round(progressPct)}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className={clsx("h-full rounded-full transition-all", STATUS_BAR_COLOR[nj.status])}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+          <div className="flex justify-between mt-1 text-[10px] text-gray-300">
+            <span>Day 1</span>
+            <span className="text-gray-400">Phase 1 ends D14</span>
+            <span>Day 18</span>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <CalendarDays size={11} className="text-gray-400" />
-          <span>{fmtDate(nj.joinDate)}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <User size={11} className="text-gray-400" />
-          <span className="truncate">{nj.managerId}</span>
-        </div>
-      </div>
 
-      {/* Phase bar */}
-      <div className="mt-3">
-        <div className="flex justify-between text-[10px] text-gray-400 mb-1">
-          <span>STP Day {nj.wds} of 18</span>
-          <span>{nj.currentPhase}</span>
-        </div>
-        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-          <div
-            className={clsx(
-              "h-full rounded-full transition-all",
-              nj.wds <= 14 ? "bg-blue-400" : "bg-amber-400"
+        {/* Milestones */}
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Milestones</span>
+            {bothDone && (
+              <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
+                <CheckCircle2 size={10} /> All done
+              </span>
             )}
-            style={{ width: `${Math.min((nj.wds / 18) * 100, 100)}%` }}
-          />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { field: "managerHuddle" as const, label: "Manager Huddle", done: !!nj.managerHuddleDone },
+              { field: "stpMetrics"    as const, label: "STP Metrics",    done: !!nj.stpMetricsDone    },
+            ] as const).map(({ field, label, done }) => (
+              <button
+                key={field}
+                onClick={(e) => { e.stopPropagation(); if (isAdmin) onProgressToggle(field, !done); }}
+                disabled={!isAdmin}
+                className={clsx(
+                  "flex items-center gap-2 rounded-lg px-2.5 py-2 border text-left transition-all",
+                  done ? "bg-emerald-50 border-emerald-200" : "bg-gray-50 border-gray-200",
+                  isAdmin && "hover:opacity-75 cursor-pointer",
+                  !isAdmin && "cursor-default"
+                )}
+              >
+                <span className={clsx(
+                  "w-4 h-4 rounded flex items-center justify-center flex-shrink-0 text-[10px] font-bold border",
+                  done ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-gray-300 text-transparent"
+                )}>✓</span>
+                <span className={clsx(
+                  "text-[11px] font-medium",
+                  done ? "text-emerald-700 line-through opacity-60" : "text-gray-600"
+                )}>{label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* STP Progress checklist */}
-      <div className="mt-3 border-t border-gray-100 pt-3 space-y-1.5">
-        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1">STP Progress</p>
-        {(
-          [
-            { field: "managerHuddle" as const, label: "Manager Huddle", done: !!nj.managerHuddleDone },
-            { field: "stpMetrics"    as const, label: "STP Metrics",    done: !!nj.stpMetricsDone    },
-          ] as const
-        ).map(({ field, label, done }) => (
-          <button
-            key={field}
-            onClick={(e) => { e.stopPropagation(); if (isAdmin) onProgressToggle(field, !done); }}
-            disabled={!isAdmin}
-            className={clsx(
-              "w-full flex items-center gap-2 text-xs rounded-lg px-2.5 py-1.5 border transition-colors text-left",
-              done
-                ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                : "bg-gray-50 border-gray-200 text-gray-500",
-              isAdmin && "hover:opacity-80 cursor-pointer",
-              !isAdmin && "cursor-default"
-            )}
-          >
-            <span className={clsx(
-              "w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border text-[10px] font-bold",
-              done ? "bg-emerald-500 border-emerald-500 text-white" : "bg-white border-gray-300 text-transparent"
-            )}>✓</span>
-            <span className={clsx("font-medium", done && "line-through opacity-70")}>{label}</span>
-            {done && <span className="ml-auto text-[9px] opacity-60">Done</span>}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex items-center justify-between mt-2">
-        {isAdmin && (
+      {/* Footer */}
+      <div className={clsx(
+        "flex items-center justify-between px-4 py-2.5 border-t",
+        selected ? "bg-indigo-50 border-indigo-100" : "bg-gray-50 border-gray-100"
+      )}>
+        {isAdmin ? (
           <div className="flex items-center gap-1.5">
             <button
               onClick={(e) => { e.stopPropagation(); onWIPClick(!nj.stpWipMarked); }}
               className={clsx(
                 "flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-colors",
                 nj.stpWipMarked
-                  ? "border-gray-300 text-gray-500 hover:bg-gray-50"
-                  : "border-purple-300 text-purple-600 hover:bg-purple-50"
+                  ? "border-gray-200 bg-white text-gray-500 hover:bg-gray-100"
+                  : "border-indigo-200 bg-white text-indigo-600 hover:bg-indigo-50"
               )}
             >
-              {nj.stpWipMarked ? <FlagOff size={11} /> : <Flag size={11} />}
-              {nj.stpWipMarked ? "Unmark WIP" : "Mark WIP"}
+              {nj.stpWipMarked ? <FlagOff size={10} /> : <Flag size={10} />}
+              {nj.stpWipMarked ? "Unmark WIP" : "Flag WIP"}
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onCloseSTP(); }}
-              className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border border-rose-300 text-rose-600 hover:bg-rose-50 transition-colors"
+              className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border border-rose-200 bg-white text-rose-500 hover:bg-rose-50 transition-colors"
             >
               Close STP
             </button>
           </div>
-        )}
-        <ChevronRight size={14} className={clsx("transition-transform ml-auto", selected && "rotate-90")} />
+        ) : <div />}
+        <div className={clsx(
+          "flex items-center gap-0.5 text-[11px] font-semibold",
+          selected ? "text-indigo-600" : "text-gray-400"
+        )}>
+          {selected ? "Open" : "Details"}
+          <ChevronRight size={12} className={clsx("transition-transform", selected && "rotate-90")} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── List View ─────────────────────────────────────────────────────────────────
+
+function NJListView({
+  njs,
+  isAdmin,
+  selectedId,
+  onSelect,
+  onWIPClick,
+  onCloseSTP,
+  onProgressToggle,
+}: {
+  njs: (NJ & { wds: number; status: STPStatus })[];
+  isAdmin: boolean;
+  selectedId: number | null;
+  onSelect: (nj: NJ & { wds: number; status: STPStatus }) => void;
+  onWIPClick: (nj: NJ & { wds: number; status: STPStatus }, marking: boolean) => void;
+  onCloseSTP: (nj: NJ & { wds: number; status: STPStatus }) => void;
+  onProgressToggle: (nj: NJ & { wds: number; status: STPStatus }, field: "managerHuddle" | "stpMetrics", done: boolean) => void;
+}) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* Table header */}
+      <div className="grid grid-cols-[2fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-4 py-2.5 bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+        <span>Employee</span>
+        <span>Phase / Day</span>
+        <span>Progress</span>
+        <span>Manager</span>
+        <span>Milestones</span>
+        <span className="w-24 text-right">Actions</span>
+      </div>
+
+      <div className="divide-y divide-gray-100">
+        {njs.map((nj) => {
+          const progressPct = Math.min((nj.wds / 18) * 100, 100);
+          const selected = selectedId === nj.id;
+
+          return (
+            <div
+              key={nj.id}
+              onClick={() => onSelect(nj)}
+              className={clsx(
+                "grid grid-cols-[2fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-4 py-3 items-center cursor-pointer transition-colors",
+                selected ? "bg-indigo-50" : "hover:bg-gray-50"
+              )}
+            >
+              {/* Employee */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={clsx(
+                  "w-1 h-8 rounded-full flex-shrink-0",
+                  STATUS_BAR_COLOR[nj.status]
+                )} />
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                  {initials(nj.name)}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold text-gray-900 truncate">{nj.name}</span>
+                    {nj.stpWipMarked && (
+                      <span className="flex-shrink-0 flex items-center gap-0.5 text-[9px] font-bold bg-amber-50 text-amber-600 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                        <Flag size={7} /> WIP
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-gray-400 truncate">{nj.empId ?? "—"}{nj.designation ? ` · ${nj.designation}` : ""}</div>
+                </div>
+              </div>
+
+              {/* Phase / Day */}
+              <div>
+                <span className={clsx(
+                  "inline-block text-[10px] font-semibold px-2 py-0.5 rounded-md border mb-1",
+                  STATUS_STYLE[nj.status]
+                )}>
+                  {nj.status.replace(" — ", " ")}
+                </span>
+                <div className="text-xs font-bold text-gray-700">Day {nj.wds} <span className="text-gray-400 font-normal">/ 18</span></div>
+              </div>
+
+              {/* Progress */}
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={clsx("h-full rounded-full transition-all", STATUS_BAR_COLOR[nj.status])}
+                      style={{ width: `${progressPct}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-gray-400 font-medium w-7 flex-shrink-0">{Math.round(progressPct)}%</span>
+                </div>
+                <div className="text-[10px] text-gray-400">{fmtDate(nj.joinDate)}</div>
+              </div>
+
+              {/* Manager */}
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 text-[9px] font-bold text-gray-500">
+                  {nj.managerId.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase()}
+                </div>
+                <span className="text-xs text-gray-600 truncate">{nj.managerId}</span>
+              </div>
+
+              {/* Milestones */}
+              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                {([
+                  { field: "managerHuddle" as const, label: "MH", done: !!nj.managerHuddleDone },
+                  { field: "stpMetrics"    as const, label: "SM", done: !!nj.stpMetricsDone    },
+                ] as const).map(({ field, label, done }) => (
+                  <button
+                    key={field}
+                    onClick={() => { if (isAdmin) onProgressToggle(nj, field, !done); }}
+                    disabled={!isAdmin}
+                    title={field === "managerHuddle" ? "Manager Huddle" : "STP Metrics"}
+                    className={clsx(
+                      "w-8 h-8 rounded-lg border text-[10px] font-bold transition-all flex items-center justify-center",
+                      done
+                        ? "bg-emerald-500 border-emerald-500 text-white"
+                        : "bg-white border-gray-200 text-gray-400",
+                      isAdmin && "hover:opacity-80 cursor-pointer",
+                      !isAdmin && "cursor-default"
+                    )}
+                  >
+                    {done ? "✓" : label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-1.5 w-24 justify-end" onClick={(e) => e.stopPropagation()}>
+                {isAdmin && (
+                  <>
+                    <button
+                      onClick={() => onWIPClick(nj, !nj.stpWipMarked)}
+                      title={nj.stpWipMarked ? "Unmark WIP" : "Flag WIP"}
+                      className={clsx(
+                        "p-1.5 rounded-lg border transition-colors",
+                        nj.stpWipMarked
+                          ? "border-gray-200 text-gray-400 hover:bg-gray-100"
+                          : "border-indigo-200 text-indigo-500 hover:bg-indigo-50"
+                      )}
+                    >
+                      {nj.stpWipMarked ? <FlagOff size={12} /> : <Flag size={12} />}
+                    </button>
+                    <button
+                      onClick={() => onCloseSTP(nj)}
+                      title="Close STP"
+                      className="p-1.5 rounded-lg border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors"
+                    >
+                      <X size={12} />
+                    </button>
+                  </>
+                )}
+                <ChevronRight size={14} className={clsx(
+                  "text-gray-300 transition-transform",
+                  selected && "rotate-90 text-indigo-500"
+                )} />
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -712,150 +1004,235 @@ function STPDrawer({
   return (
     <>
     <div className={clsx(
-      "fixed inset-y-0 right-0 bg-white border-l border-gray-200 shadow-xl z-50 flex flex-col transition-all duration-300",
-      expanded ? "w-[780px]" : "w-[440px]"
+      "fixed inset-y-0 right-0 bg-gray-50 border-l border-gray-200 shadow-2xl z-50 flex flex-col transition-all duration-300",
+      expanded ? "w-[820px]" : "w-[460px]"
     )}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-            {initials(nj.name)}
-          </div>
-          <div>
-            <div className="font-semibold text-gray-900 text-sm">{nj.name}</div>
-            <div className="text-xs text-gray-400">{nj.empId}</div>
+
+      {/* ── Gradient banner header ── */}
+      <div className={clsx(
+        "flex-shrink-0 bg-gradient-to-br from-purple-600 via-fuchsia-600 to-indigo-700 px-5 pt-4 pb-5 relative"
+      )}>
+        {/* Top controls */}
+        <div className="flex items-center justify-between mb-4">
+          <span className={clsx(
+            "text-[11px] font-bold px-2.5 py-1 rounded-full border",
+            "bg-white/15 border-white/25 text-white"
+          )}>
+            <span className={clsx("inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle", STATUS_DOT[nj.status])} />
+            {nj.status}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setExpanded(!expanded)}
+              title={expanded ? "Collapse" : "Expand"}
+              className="text-white/70 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+            >
+              {expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+            </button>
+            <button onClick={onClose} className="text-white/70 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+              <X size={16} />
+            </button>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => { setEmailModal(true); setSent(null); setSendError(null); setRecipients([]); setInputVal(""); }}
-            title="Send email report"
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition-colors"
-          >
-            <Mail size={13} /> Email Report
-          </button>
-          <button
-            onClick={() => setExpanded(!expanded)}
-            title={expanded ? "Collapse" : "Expand"}
-            className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
-          >
-            {expanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-          </button>
-          <button
-            onClick={() => { setHuddleModal(true); setHuddleDone(null); setHuddleError(null); }}
-            title="Auto-schedule daily huddles Day 2–14"
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100 transition-colors"
-          >
-            <Repeat2 size={13} /> Huddles
-          </button>
-          <button
-            onClick={() => { setMeetingModal(true); setMeetingDone(null); setMeetingError(null); }}
-            title="Schedule meeting"
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
-          >
-            <Video size={13} /> Schedule
-          </button>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-            <X size={15} />
-          </button>
+
+        {/* Avatar + identity */}
+        <div className="flex items-center gap-4">
+          <div className={clsx(
+            "w-14 h-14 rounded-2xl flex items-center justify-center text-white text-xl font-bold flex-shrink-0 shadow-lg",
+            "bg-white/20 backdrop-blur-sm border border-white/30"
+          )}>
+            {initials(nj.name)}
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-white font-bold text-lg leading-tight truncate">{nj.name}</h2>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className="text-purple-200 text-xs">{nj.empId ?? "—"}</span>
+              {nj.designation && (
+                <>
+                  <span className="text-white/30">·</span>
+                  <span className="text-purple-200 text-xs truncate">{nj.designation}</span>
+                </>
+              )}
+            </div>
+            {nj.stpWipMarked && (
+              <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-bold bg-yellow-400/20 text-yellow-200 border border-yellow-300/30 px-2 py-0.5 rounded-full">
+                <Flag size={9} /> WIP Flagged
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Quick stat chips */}
+        <div className="flex items-center gap-2 mt-4 flex-wrap">
+          <div className="flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-lg px-3 py-1.5">
+            <Clock size={12} className="text-purple-200" />
+            <span className="text-white text-xs font-semibold">Day {nj.wds}</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-lg px-3 py-1.5">
+            <CalendarDays size={12} className="text-purple-200" />
+            <span className="text-white text-xs font-semibold">{fmtDate(nj.joinDate)}</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-lg px-3 py-1.5">
+            <User size={12} className="text-purple-200" />
+            <span className="text-white text-xs font-semibold truncate max-w-[120px]">{nj.managerId}</span>
+          </div>
+          <div className={clsx(
+            "flex items-center gap-1.5 rounded-lg px-3 py-1.5 border text-xs font-semibold",
+            nj.hasPositiveNR
+              ? "bg-emerald-400/20 border-emerald-300/30 text-emerald-200"
+              : "bg-red-400/20 border-red-300/30 text-red-200"
+          )}>
+            {nj.hasPositiveNR ? "✓ NR Positive" : "✗ NR Negative"}
+          </div>
         </div>
       </div>
 
-      {/* Body */}
+      {/* ── Action toolbar ── */}
+      <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-2.5 flex items-center gap-2">
+        <button
+          onClick={() => { setEmailModal(true); setSent(null); setSendError(null); setRecipients([]); setInputVal(""); }}
+          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-200 hover:bg-indigo-100 transition-colors"
+        >
+          <Mail size={13} /> Email Report
+        </button>
+        <button
+          onClick={() => { setHuddleModal(true); setHuddleDone(null); setHuddleError(null); }}
+          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100 transition-colors"
+        >
+          <Repeat2 size={13} /> Auto Huddles
+        </button>
+        <button
+          onClick={() => { setMeetingModal(true); setMeetingDone(null); setMeetingError(null); }}
+          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+        >
+          <Video size={13} /> Schedule Meeting
+        </button>
+      </div>
+
+      {/* ── Body ── */}
       <div className={clsx(
         "flex-1 overflow-y-auto p-5",
         expanded ? "grid grid-cols-2 gap-5 items-start" : "space-y-4"
       )}>
-        {/* Left column (or single column): NJ details + phase bar */}
+        {/* Left col: details + phase bar */}
         <div className="space-y-4">
-          {/* Status badges */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={clsx("text-xs font-semibold px-3 py-1 rounded-full border", STATUS_STYLE[nj.status])}>
-              {nj.status}
-            </span>
-            {nj.stpWipMarked && (
-              <span className="text-xs font-semibold px-3 py-1 rounded-full border border-purple-300 bg-purple-50 text-purple-700 flex items-center gap-1">
-                <Flag size={10} /> WIP Flagged
-              </span>
-            )}
-          </div>
+
+          {/* WIP note callout */}
           {nj.stpWipMarked && nj.stpWipNote && (
-            <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 italic">
-              "{nj.stpWipNote}"
-            </div>
-          )}
-          {nj.stpWipMarked && nj.stpWipMarkedBy && (
-            <div className="text-[10px] text-gray-400">
-              Marked by {nj.stpWipMarkedBy} · {nj.stpWipMarkedAt ? new Date(nj.stpWipMarkedAt).toLocaleDateString("en-IN") : ""}
+            <div className="flex gap-3 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3">
+              <Flag size={14} className="text-yellow-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-semibold text-yellow-800 mb-0.5">WIP Note</p>
+                <p className="text-xs text-yellow-700 italic">"{nj.stpWipNote}"</p>
+                {nj.stpWipMarkedBy && (
+                  <p className="text-[10px] text-yellow-500 mt-1">
+                    by {nj.stpWipMarkedBy} · {nj.stpWipMarkedAt ? new Date(nj.stpWipMarkedAt).toLocaleDateString("en-IN") : ""}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
-          {/* NJ Details */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-2.5">
-            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Details</p>
-            <DetailRow label="Join Date"   value={fmtDate(nj.joinDate)} />
-            <DetailRow label="Tenure"      value={fmtTenure(nj.joinDate)} />
-            <DetailRow label="Phase"       value={nj.currentPhase} />
-            <DetailRow label="Manager"     value={nj.managerId} />
-            <DetailRow label="Location"    value={nj.location ?? "—"} />
-            <DetailRow label="Designation" value={nj.designation ?? "—"} />
-            <DetailRow label="Email"       value={nj.email ?? "—"} />
-            <DetailRow label="NR Status"   value={nj.hasPositiveNR ? "✅ Positive" : "❌ Negative"} />
-            {nj.stpExtendedDays > 0 && (
-              <DetailRow label="Extended Days" value={`${nj.stpExtendedDays} days`} />
-            )}
+          {/* Details card */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-purple-100 flex items-center justify-center">
+                <User size={12} className="text-purple-600" />
+              </div>
+              <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Profile</span>
+            </div>
+            <div className="p-4 grid grid-cols-2 gap-x-4 gap-y-3">
+              <InfoCell icon={<CalendarDays size={12} />} label="Join Date"    value={fmtDate(nj.joinDate)} />
+              <InfoCell icon={<Clock size={12} />}        label="Tenure"       value={fmtTenure(nj.joinDate)} />
+              <InfoCell icon={<Activity size={12} />}     label="Phase"        value={nj.currentPhase} />
+              <InfoCell icon={<User size={12} />}         label="Manager"      value={nj.managerId} />
+              {nj.location    && <InfoCell icon={<MapPin size={12} />}  label="Location"     value={nj.location} />}
+              {nj.email       && <InfoCell icon={<MailIcon size={12} />} label="Email"       value={nj.email} truncate />}
+              {nj.stpExtendedDays > 0 && (
+                <InfoCell icon={<Clock size={12} />} label="Extended" value={`+${nj.stpExtendedDays} days`} highlight="amber" />
+              )}
+            </div>
           </div>
 
           {/* STP Phase Progress */}
-          <STPPhaseBar
-            joinDate={nj.joinDate}
-            stpExtendedDays={nj.stpExtendedDays}
-            stpClosed={nj.stpClosed}
-          />
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+              <div className="w-6 h-6 rounded-md bg-blue-100 flex items-center justify-center">
+                <Activity size={12} className="text-blue-600" />
+              </div>
+              <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Phase Progress</span>
+            </div>
+            <div className="p-4">
+              <STPPhaseBar
+                joinDate={nj.joinDate}
+                stpExtendedDays={nj.stpExtendedDays}
+                stpClosed={nj.stpClosed}
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Right column (expanded) or continued single column: task tracker + assessment + meetings */}
+        {/* Right col: trackers + meetings */}
         <div className="space-y-4">
           <DayWiseTaskTracker njId={nj.id} joinDate={nj.joinDate} />
           <AssessmentChecklist njId={nj.id} njName={nj.name} />
 
           {/* Meeting History */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Video size={14} className="text-emerald-500" />
-                <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Meetings</p>
+                <div className="w-6 h-6 rounded-md bg-emerald-100 flex items-center justify-center">
+                  <Video size={12} className="text-emerald-600" />
+                </div>
+                <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Meetings</span>
                 {meetings && meetings.length > 0 && (
-                  <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">{meetings.length}</span>
+                  <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">{meetings.length}</span>
                 )}
               </div>
             </div>
             {meetings === null ? (
-              <div className="p-4 space-y-2">
-                {[...Array(2)].map((_, i) => <div key={i} className="animate-pulse h-8 bg-gray-100 rounded-lg" />)}
+              <div className="p-4 space-y-2.5">
+                {[...Array(3)].map((_, i) => <div key={i} className="animate-pulse h-10 bg-gray-100 rounded-xl" />)}
               </div>
             ) : meetings.length === 0 ? (
-              <div className="px-4 py-6 text-center text-xs text-gray-400">No meetings scheduled yet</div>
+              <div className="flex flex-col items-center py-8 text-center px-4">
+                <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center mb-2">
+                  <Video size={18} className="text-gray-300" />
+                </div>
+                <p className="text-xs text-gray-400 font-medium">No meetings scheduled yet</p>
+                <p className="text-[10px] text-gray-300 mt-0.5">Use Schedule Meeting above</p>
+              </div>
             ) : (
               <div className="divide-y divide-gray-50">
                 {meetings.map(m => (
-                  <div key={m.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <div key={m.id} className="flex items-center gap-3 px-4 py-3">
                     <div className={clsx(
-                      "w-2 h-2 rounded-full flex-shrink-0",
-                      m.status === "Scheduled"  && "bg-blue-400",
-                      m.status === "Completed"  && "bg-emerald-400",
-                      m.status === "Cancelled"  && "bg-gray-300",
-                    )} />
+                      "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-[10px] font-bold",
+                      m.status === "Scheduled" && "bg-blue-100 text-blue-600",
+                      m.status === "Completed" && "bg-emerald-100 text-emerald-600",
+                      m.status === "Cancelled" && "bg-gray-100 text-gray-400",
+                    )}>
+                      <Video size={13} />
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-semibold text-gray-700 truncate">{m.subject}</div>
-                      <div className="text-[10px] text-gray-400 mt-0.5">
-                        {new Date(m.scheduledAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                        {" · "}{m.durationMins} min · {m.status}
+                      <div className="text-xs font-semibold text-gray-800 truncate">{m.subject}</div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[10px] text-gray-400">
+                          {new Date(m.scheduledAt).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                        </span>
+                        <span className="text-gray-300">·</span>
+                        <span className="text-[10px] text-gray-400">{m.durationMins} min</span>
+                        <span className={clsx(
+                          "text-[9px] font-bold px-1.5 py-0.5 rounded-full",
+                          m.status === "Scheduled" && "bg-blue-100 text-blue-600",
+                          m.status === "Completed" && "bg-emerald-100 text-emerald-600",
+                          m.status === "Cancelled" && "bg-gray-100 text-gray-400",
+                        )}>{m.status}</span>
                       </div>
                     </div>
                     {m.teamsJoinUrl && (
                       <a href={m.teamsJoinUrl} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 hover:underline flex-shrink-0"
+                        className="flex items-center gap-1 text-[10px] font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2 py-1 rounded-lg flex-shrink-0 transition-colors"
                       >
                         <ExternalLink size={10} /> Join
                       </a>
@@ -1270,6 +1647,38 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between text-sm">
       <span className="text-gray-400">{label}</span>
       <span className="text-gray-700 font-medium text-right max-w-[55%] break-words">{value}</span>
+    </div>
+  );
+}
+
+function InfoCell({
+  icon,
+  label,
+  value,
+  highlight,
+  truncate,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  highlight?: "amber" | "emerald";
+  truncate?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-1 text-[10px] text-gray-400 font-semibold uppercase tracking-wide">
+        <span className="text-gray-300">{icon}</span>
+        {label}
+      </div>
+      <p className={clsx(
+        "text-xs font-semibold",
+        truncate && "truncate",
+        highlight === "amber"   && "text-amber-600",
+        highlight === "emerald" && "text-emerald-600",
+        !highlight              && "text-gray-800"
+      )}>
+        {value}
+      </p>
     </div>
   );
 }

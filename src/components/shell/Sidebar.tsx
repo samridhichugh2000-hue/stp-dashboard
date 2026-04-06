@@ -54,13 +54,6 @@ const navItems: NavItem[] = [
     color: "from-indigo-400 to-indigo-600",
   },
   {
-    label: "Qubits",
-    href: "/dashboard/qubits",
-    icon: <Mic2 size={17} />,
-    roles: ["admin", "manager"],
-    color: "from-violet-400 to-violet-600",
-  },
-  {
     label: "NRD",
     href: "/dashboard/nrd",
     icon: <TrendingUp size={17} />,

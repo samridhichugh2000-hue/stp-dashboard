@@ -25,7 +25,7 @@ const C_RED   = "#fca5a5";   // red-300
 function computeAction(dev: boolean | null, tenure: number): string | null {
   if (dev === null) return null;
   if (dev) return "On Track";
-  return tenure > 4 ? "PA/PIP Suggested" : "Under Observation";
+  return tenure >= 4 ? "PA/PIP Suggested" : "Under Observation";
 }
 
 function Pill({ label, palette }: { label: string; palette: typeof P_GREEN }) {
@@ -155,8 +155,8 @@ export default function PerformancePage() {
   const statCards = [
     { label: "Developed",         value: devCount,    desc: "Both NR & ROI positive",   bg: "from-indigo-400 to-violet-500" },
     { label: "Not Developed",     value: notDevCount, desc: "NR or ROI negative",        bg: "from-pink-400 to-rose-500" },
-    { label: "Under Observation", value: underObs,    desc: "Negative within 4 months", bg: "from-purple-400 to-indigo-500" },
-    { label: "PA/PIP Suggested",  value: pipCount,    desc: "Negative beyond 4 months", bg: "from-rose-500 to-red-600" },
+    { label: "Under Observation", value: underObs,    desc: "Negative, under 4 months",  bg: "from-purple-400 to-indigo-500" },
+    { label: "PA/PIP Suggested",  value: pipCount,    desc: "Negative, 4+ months",       bg: "from-rose-500 to-red-600" },
   ];
 
   // ── Chart data — all charts use `filtered` so they react to manager filter ─

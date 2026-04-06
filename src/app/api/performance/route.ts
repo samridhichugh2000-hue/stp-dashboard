@@ -18,6 +18,13 @@ export async function GET() {
   const njs = (await db.select().from(newJoiners).where(eq(newJoiners.isActive, true)).all()).filter(isValidNJ);
   const allNR = await db.select().from(nrRecords).all();
 
+  const now = new Date();
+
+  function livetenureMonths(joinDateISO: string): number {
+    const doj = new Date(joinDateISO);
+    return (now.getFullYear() - doj.getFullYear()) * 12 + (now.getMonth() - doj.getMonth());
+  }
+
   const rows = [...njs].sort((a, b) => b.joinDate.localeCompare(a.joinDate)).map((nj) => {
     const njNRRecords = allNR.filter((r) => r.njId === nj.id);
 
@@ -53,7 +60,7 @@ export async function GET() {
       name: nj.name,
       designation: nj.designation,
       joinDate: nj.joinDate,
-      tenureMonths: nj.tenureMonths,
+      tenureMonths: livetenureMonths(nj.joinDate),
       category: nj.category,
       nrStatus,
       nrPositiveMonth,
