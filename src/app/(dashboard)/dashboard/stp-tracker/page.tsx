@@ -1005,7 +1005,7 @@ function STPDrawer({
     <>
     <div className={clsx(
       "fixed inset-y-0 right-0 bg-gray-50 border-l border-gray-200 shadow-2xl z-50 flex flex-col transition-all duration-300",
-      expanded ? "w-[820px]" : "w-[460px]"
+      expanded ? "w-[1100px]" : "w-[460px]"
     )}>
 
       {/* ── Gradient banner header ── */}
@@ -1112,7 +1112,7 @@ function STPDrawer({
       {/* ── Body ── */}
       <div className={clsx(
         "flex-1 overflow-y-auto p-5",
-        expanded ? "grid grid-cols-2 gap-5 items-start" : "space-y-4"
+        expanded ? "grid grid-cols-[320px_1fr] gap-5 items-start" : "space-y-4"
       )}>
         {/* Left col: details + phase bar */}
         <div className="space-y-4">

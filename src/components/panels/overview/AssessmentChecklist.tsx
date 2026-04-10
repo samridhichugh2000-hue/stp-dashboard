@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { clsx } from "clsx";
-import { ClipboardList, Plus, ChevronDown, ChevronUp } from "lucide-react";
+import { ClipboardList, Plus, ChevronDown, ChevronUp, Maximize2, X } from "lucide-react";
 
 // ── checklist items ────────────────────────────────────────────────────────────
 
 const CHECKLIST_ITEMS = [
   { id: "training_completed",       label: "STP Training Completed"                        },
-  { id: "qubits_satisfactory",      label: "Qubits Score Satisfactory (≥70)"               },
+  { id: "qubits_satisfactory",      label: "Qubits Completed"                              },
   { id: "dsr_regular",              label: "DSR Submitted Regularly"                        },
   { id: "huddle_attendance",        label: "Huddle Attendance Complete"                     },
   { id: "manager_huddle_done",      label: "Manager Huddle Completed"                       },
@@ -19,7 +19,84 @@ const CHECKLIST_ITEMS = [
   { id: "sc_policy_guidance",       label: "Tentative SC Policy Guidance"                   },
 ];
 
-type ChecklistData = Record<string, boolean>;
+type ChecklistData = Record<string, boolean | string>;
+
+// ── STP metrics rows ───────────────────────────────────────────────────────────
+
+interface STPMetricRow {
+  id: string;
+  parameter: string;
+  positiveCriteria: string;
+  negativeCriteria: string;
+}
+
+const STP_METRICS_ROWS: STPMetricRow[] = [
+  {
+    id: "attendance",
+    parameter: "Attendance & Engagement",
+    positiveCriteria: "Attended all Meetings?",
+    negativeCriteria: "Missed any meetings",
+  },
+  {
+    id: "reporting",
+    parameter: "Reporting Discipline",
+    positiveCriteria: "Submitted DSRs Everyday",
+    negativeCriteria: "Missed any DSRs",
+  },
+  {
+    id: "lead_1",
+    parameter: "Lead Handling",
+    positiveCriteria: "Positive and independent",
+    negativeCriteria: "Any miss or negligence identified",
+  },
+  {
+    id: "lead_2",
+    parameter: "Proactive and completes tasks on or before time",
+    positiveCriteria: "Demonstrated ownership / initiative",
+    negativeCriteria: "Passive or reactive behavior",
+  },
+  {
+    id: "wfh",
+    parameter: "WFH Capable",
+    positiveCriteria: "No disturbances, Joins timely, Punctual, No internet issues",
+    negativeCriteria: "Improvement required",
+  },
+];
+
+// ── HR-specific metrics rows (Score inputs) ────────────────────────────────────
+
+const STP_HR_METRICS_ROWS: STPMetricRow[] = [
+  {
+    id: "attendance",
+    parameter: "Attendance & Engagement",
+    positiveCriteria: "Attended all huddles",
+    negativeCriteria: "Missed any huddles",
+  },
+  {
+    id: "reporting",
+    parameter: "Reporting Discipline",
+    positiveCriteria: "Submitted DSRs on time",
+    negativeCriteria: "Missed any DSRs",
+  },
+  {
+    id: "audit",
+    parameter: "Audit Quality",
+    positiveCriteria: "Positive audit",
+    negativeCriteria: "Negative audit",
+  },
+  {
+    id: "proactive",
+    parameter: "Proactive and completes STP on or before time",
+    positiveCriteria: "Demonstrated ownership / initiative",
+    negativeCriteria: "Passive or reactive behaviour",
+  },
+  {
+    id: "wfh",
+    parameter: "WFH Capable",
+    positiveCriteria: "Includes - No disturbances, joins timely, Punctual, no internet issues encountered.",
+    negativeCriteria: "Improvement required",
+  },
+];
 
 const OUTCOME_STYLE: Record<string, string> = {
   Pass:     "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -37,6 +114,41 @@ interface AssessmentRecord {
   hrNotes: string | null;
   outcome: string;
   checklistData: string | null;
+}
+
+// ── Score toggle (0 = neutral, 1 = good) ──────────────────────────────────────
+
+function ScoreToggle({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="inline-flex rounded-md border border-gray-200 overflow-hidden text-[11px] font-semibold">
+      <button
+        type="button"
+        onClick={() => onChange(value === "0" ? "" : "0")}
+        className={clsx(
+          "px-2.5 py-1 border-r border-gray-200 transition-colors",
+          value === "0" ? "bg-gray-200 text-gray-600" : "bg-white text-gray-300 hover:bg-gray-50"
+        )}
+        title="Neutral"
+      >0</button>
+      <button
+        type="button"
+        onClick={() => onChange(value === "1" ? "" : "1")}
+        className={clsx(
+          "px-2.5 py-1 transition-colors",
+          value === "1" ? "bg-emerald-100 text-emerald-700" : "bg-white text-gray-300 hover:bg-gray-50"
+        )}
+        title="Good"
+      >1</button>
+    </div>
+  );
+}
+
+// ── Score display badge ────────────────────────────────────────────────────────
+
+function ScoreBadge({ value }: { value: string }) {
+  if (value === "1") return <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 font-bold text-[11px]">1</span>;
+  if (value === "0") return <span className="inline-block px-2 py-0.5 rounded-md bg-gray-100 text-gray-500 font-bold text-[11px]">0</span>;
+  return <span className="text-gray-300 text-[11px]">—</span>;
 }
 
 // ── component ──────────────────────────────────────────────────────────────────
@@ -57,6 +169,14 @@ export function AssessmentChecklist({ njId, njName }: Props) {
   const [managerNotes,  setManagerNotes]  = useState("");
   const [hrNotes,       setHrNotes]       = useState("");
   const [outcome,       setOutcome]       = useState<"Pass" | "Fail" | "Pending" | "Deferred">("Pending");
+
+  // Expand modal for notes
+  const [expandedField, setExpandedField] = useState<"manager" | "hr" | null>(null);
+  const [expandedValue, setExpandedValue] = useState("");
+
+  // STP Metrics section toggle + active tab
+  const [showStpMetrics,  setShowStpMetrics]  = useState(false);
+  const [stpMetricsView,  setStpMetricsView]  = useState<"manager" | "hr">("manager");
 
   const fetchRecords = useCallback(() => {
     fetch(`/api/assessment?njId=${njId}`)
@@ -155,31 +275,166 @@ export function AssessmentChecklist({ njId, njName }: Props) {
           </div>
 
           {/* Notes */}
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div>
-              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">
-                Manager Notes
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                  Manager Notes
+                </label>
+                <button
+                  type="button"
+                  onClick={() => { setExpandedField("manager"); setExpandedValue(managerNotes); }}
+                  className="flex items-center gap-1 text-[10px] text-indigo-500 hover:text-indigo-700 transition-colors"
+                  title="Expand editor"
+                >
+                  <Maximize2 size={11} /> Expand
+                </button>
+              </div>
               <textarea
                 value={managerNotes}
                 onChange={e => setManagerNotes(e.target.value)}
-                rows={2}
+                rows={4}
                 placeholder="Add manager observations…"
-                className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-y"
               />
             </div>
             <div>
-              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide block mb-1">
-                HR Notes
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                  HR Notes
+                </label>
+                <button
+                  type="button"
+                  onClick={() => { setExpandedField("hr"); setExpandedValue(hrNotes); }}
+                  className="flex items-center gap-1 text-[10px] text-indigo-500 hover:text-indigo-700 transition-colors"
+                  title="Expand editor"
+                >
+                  <Maximize2 size={11} /> Expand
+                </button>
+              </div>
               <textarea
                 value={hrNotes}
                 onChange={e => setHrNotes(e.target.value)}
-                rows={2}
+                rows={4}
                 placeholder="Add HR observations…"
-                className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                className="w-full text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-y"
               />
             </div>
+          </div>
+
+          {/* STP Metrics */}
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setShowStpMetrics(v => !v)}
+              className="flex items-center gap-2 w-full text-left group"
+            >
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide group-hover:text-indigo-600 transition-colors">
+                STP Metrics
+              </p>
+              {showStpMetrics ? <ChevronUp size={12} className="text-gray-400" /> : <ChevronDown size={12} className="text-gray-400" />}
+            </button>
+
+            {showStpMetrics && (
+              <div className="space-y-2">
+                {/* By Manager / By HR tabs */}
+                <div className="flex gap-1 p-0.5 bg-gray-100 rounded-lg w-fit">
+                  {(["manager", "hr"] as const).map(tab => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setStpMetricsView(tab)}
+                      className={clsx(
+                        "px-3 py-1 text-[11px] font-semibold rounded-md transition-colors",
+                        stpMetricsView === tab
+                          ? "bg-white text-indigo-700 shadow-sm"
+                          : "text-gray-500 hover:text-gray-700"
+                      )}
+                    >
+                      By {tab === "manager" ? "Manager" : "HR"}
+                    </button>
+                  ))}
+                </div>
+
+                {stpMetricsView === "manager" ? (
+                  /* ── Manager table (A / B — 0 or 1) ── */
+                  <div className="overflow-x-auto rounded-xl border border-gray-200">
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200">
+                          <th className="text-left px-3 py-2.5 font-semibold text-gray-500 w-[22%]">Parameter</th>
+                          <th className="text-left px-3 py-2.5 font-semibold text-emerald-600 w-[30%]">Positive Criteria</th>
+                          <th className="text-center px-2 py-2.5 font-semibold text-emerald-600 w-[8%]">A</th>
+                          <th className="text-left px-3 py-2.5 font-semibold text-red-500 w-[30%]">Negative Criteria</th>
+                          <th className="text-center px-2 py-2.5 font-semibold text-red-500 w-[8%]">B</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {STP_METRICS_ROWS.map(row => (
+                          <tr key={row.id} className="hover:bg-gray-50/60 transition-colors">
+                            <td className="px-3 py-2.5 font-semibold text-gray-700 align-middle">{row.parameter}</td>
+                            <td className="px-3 py-2.5 text-gray-600 align-middle">{row.positiveCriteria}</td>
+                            <td className="px-2 py-2.5 text-center align-middle">
+                              <ScoreToggle
+                                value={String(checklist["stp_mgr_" + row.id + "_a"] ?? "")}
+                                onChange={v => setChecklist(prev => ({ ...prev, ["stp_mgr_" + row.id + "_a"]: v }))}
+                              />
+                            </td>
+                            <td className="px-3 py-2.5 text-gray-600 align-middle">{row.negativeCriteria}</td>
+                            <td className="px-2 py-2.5 text-center align-middle">
+                              {row.negativeCriteria ? (
+                                <ScoreToggle
+                                  value={String(checklist["stp_mgr_" + row.id + "_b"] ?? "")}
+                                  onChange={v => setChecklist(prev => ({ ...prev, ["stp_mgr_" + row.id + "_b"]: v }))}
+                                />
+                              ) : null}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  /* ── HR table (Score — 0 or 1) ── */
+                  <div className="overflow-x-auto rounded-xl border border-gray-200">
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200">
+                          <th className="text-left px-3 py-2.5 font-semibold text-gray-500 w-[22%]">Parameter</th>
+                          <th className="text-left px-3 py-2.5 font-semibold text-emerald-600 w-[28%]">Positive Criteria</th>
+                          <th className="text-center px-2 py-2.5 font-semibold text-emerald-600 w-[8%]">Score</th>
+                          <th className="text-left px-3 py-2.5 font-semibold text-red-500 w-[28%]">Negative Criteria</th>
+                          <th className="text-center px-2 py-2.5 font-semibold text-red-500 w-[8%]">Score</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {STP_HR_METRICS_ROWS.map(row => (
+                          <tr key={row.id} className="hover:bg-gray-50/60 transition-colors">
+                            <td className="px-3 py-2.5 font-semibold text-gray-700 align-middle">{row.parameter}</td>
+                            <td className="px-3 py-2.5 text-gray-600 align-middle">{row.positiveCriteria}</td>
+                            <td className="px-2 py-2.5 text-center align-middle">
+                              <ScoreToggle
+                                value={String(checklist["stp_hr_" + row.id + "_a"] ?? "")}
+                                onChange={v => setChecklist(prev => ({ ...prev, ["stp_hr_" + row.id + "_a"]: v }))}
+                              />
+                            </td>
+                            <td className="px-3 py-2.5 text-gray-600 align-middle">{row.negativeCriteria}</td>
+                            <td className="px-2 py-2.5 text-center align-middle">
+                              {row.negativeCriteria ? (
+                                <ScoreToggle
+                                  value={String(checklist["stp_hr_" + row.id + "_b"] ?? "")}
+                                  onChange={v => setChecklist(prev => ({ ...prev, ["stp_hr_" + row.id + "_b"]: v }))}
+                                />
+                              ) : null}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Outcome */}
@@ -269,16 +524,90 @@ export function AssessmentChecklist({ njId, njName }: Props) {
                         </div>
                       ))}
                     </div>
+                    {/* STP Metrics — By Manager (checkboxes) */}
+                    {STP_METRICS_ROWS.some(row => data["stp_mgr_" + row.id + "_a"] || data["stp_mgr_" + row.id + "_b"]) && (
+                      <div>
+                        <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-1">STP Metrics — By Manager</p>
+                        <div className="overflow-x-auto rounded-xl border border-gray-100">
+                          <table className="w-full text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-gray-50 border-b border-gray-100">
+                                <th className="text-left px-2.5 py-2 font-semibold text-gray-400 w-[22%]">Parameter</th>
+                                <th className="text-left px-2.5 py-2 font-semibold text-emerald-500 w-[28%]">Positive Criteria</th>
+                                <th className="text-center px-2 py-2 font-semibold text-emerald-500 w-[6%]">A</th>
+                                <th className="text-left px-2.5 py-2 font-semibold text-red-400 w-[28%]">Negative Criteria</th>
+                                <th className="text-center px-2 py-2 font-semibold text-red-400 w-[6%]">B</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {STP_METRICS_ROWS.map(row => (
+                                <tr key={row.id} className="bg-white">
+                                  <td className="px-2.5 py-2 font-semibold text-gray-600 align-middle">{row.parameter}</td>
+                                  <td className="px-2.5 py-2 text-gray-500 align-middle">{row.positiveCriteria}</td>
+                                  <td className="px-2 py-2 text-center align-middle">
+                                    <ScoreBadge value={String(data["stp_mgr_" + row.id + "_a"] ?? "")} />
+                                  </td>
+                                  <td className="px-2.5 py-2 text-gray-500 align-middle">{row.negativeCriteria}</td>
+                                  <td className="px-2 py-2 text-center align-middle">
+                                    {row.negativeCriteria
+                                      ? <ScoreBadge value={String(data["stp_mgr_" + row.id + "_b"] ?? "")} />
+                                      : null}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* STP Metrics — By HR (score inputs) */}
+                    {STP_HR_METRICS_ROWS.some(row => data["stp_hr_" + row.id + "_a"] || data["stp_hr_" + row.id + "_b"]) && (
+                      <div>
+                        <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-1">STP Metrics — By HR</p>
+                        <div className="overflow-x-auto rounded-xl border border-gray-100">
+                          <table className="w-full text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-gray-50 border-b border-gray-100">
+                                <th className="text-left px-2.5 py-2 font-semibold text-gray-400 w-[22%]">Parameter</th>
+                                <th className="text-left px-2.5 py-2 font-semibold text-emerald-500 w-[26%]">Positive Criteria</th>
+                                <th className="text-center px-2 py-2 font-semibold text-emerald-500 w-[8%]">Score</th>
+                                <th className="text-left px-2.5 py-2 font-semibold text-red-400 w-[26%]">Negative Criteria</th>
+                                <th className="text-center px-2 py-2 font-semibold text-red-400 w-[8%]">Score</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                              {STP_HR_METRICS_ROWS.map(row => (
+                                <tr key={row.id} className="bg-white">
+                                  <td className="px-2.5 py-2 font-semibold text-gray-600 align-middle">{row.parameter}</td>
+                                  <td className="px-2.5 py-2 text-gray-500 align-middle">{row.positiveCriteria}</td>
+                                  <td className="px-2 py-2 text-center align-middle">
+                                    <ScoreBadge value={String(data["stp_hr_" + row.id + "_a"] ?? "")} />
+                                  </td>
+                                  <td className="px-2.5 py-2 text-gray-500 align-middle">{row.negativeCriteria}</td>
+                                  <td className="px-2 py-2 text-center align-middle">
+                                    {row.negativeCriteria
+                                      ? <ScoreBadge value={String(data["stp_hr_" + row.id + "_b"] ?? "")} />
+                                      : null}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
                     {rec.managerNotes && (
                       <div>
                         <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">Manager Notes</p>
-                        <p className="text-xs text-gray-600 bg-white rounded-lg px-3 py-2 border border-gray-100">{rec.managerNotes}</p>
+                        <p className="text-xs text-gray-600 bg-white rounded-lg px-3 py-2 border border-gray-100 whitespace-pre-wrap">{rec.managerNotes}</p>
                       </div>
                     )}
                     {rec.hrNotes && (
                       <div>
                         <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5">HR Notes</p>
-                        <p className="text-xs text-gray-600 bg-white rounded-lg px-3 py-2 border border-gray-100">{rec.hrNotes}</p>
+                        <p className="text-xs text-gray-600 bg-white rounded-lg px-3 py-2 border border-gray-100 whitespace-pre-wrap">{rec.hrNotes}</p>
                       </div>
                     )}
                   </div>
@@ -286,6 +615,52 @@ export function AssessmentChecklist({ njId, njName }: Props) {
               </div>
             );
           })}
+        </div>
+      )}
+      {/* Expand modal */}
+      {expandedField && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col" style={{ maxHeight: "85vh" }}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <p className="text-sm font-semibold text-gray-800">
+                {expandedField === "manager" ? "Manager Notes" : "HR Notes"}
+                <span className="ml-2 text-xs font-normal text-gray-400">— {njName}</span>
+              </p>
+              <button
+                onClick={() => setExpandedField(null)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 flex-1 overflow-auto">
+              <textarea
+                value={expandedValue}
+                onChange={e => setExpandedValue(e.target.value)}
+                placeholder={expandedField === "manager" ? "Add manager observations…" : "Add HR observations…"}
+                className="w-full h-full min-h-[300px] text-sm border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-300 resize-none"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-3 px-5 py-4 border-t border-gray-100">
+              <button
+                onClick={() => setExpandedField(null)}
+                className="flex-1 py-2 text-sm font-medium rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (expandedField === "manager") setManagerNotes(expandedValue);
+                  else setHrNotes(expandedValue);
+                  setExpandedField(null);
+                }}
+                className="flex-1 py-2 text-sm font-semibold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

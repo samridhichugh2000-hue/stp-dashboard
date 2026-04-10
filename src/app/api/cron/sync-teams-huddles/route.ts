@@ -148,6 +148,19 @@ async function checkCompleted(
   return attendees.includes(njEmailLower);
 }
 
+// ── Title matching ────────────────────────────────────────────────────────────
+
+/** Returns true if a calendar event subject matches a huddle for this NJ.
+ *  Accepted formats (case-insensitive):
+ *    "Huddle with HR - <firstName>"      ← legacy
+ *    "Daily STP Huddle — <firstName>"    ← scheduled by dashboard
+ */
+function isHuddleForNJ(subject: string, njFirstName: string): boolean {
+  const s = subject.toLowerCase();
+  const n = njFirstName.toLowerCase();
+  return s.includes(`huddle with hr - ${n}`) || s.includes(`daily stp huddle \u2014 ${n}`);
+}
+
 // ── Upsert helpers ────────────────────────────────────────────────────────────
 
 async function upsertHuddle(
@@ -266,7 +279,7 @@ export async function GET(req: NextRequest) {
 
       for (const date of normalDates) {
         const dayEvents = eventsByDate[date] ?? [];
-        const matched   = dayEvents.find(e => e.subject.includes(`huddle with hr - ${njFirstName}`));
+        const matched   = dayEvents.find(e => isHuddleForNJ(e.subject, njFirstName));
         const completed = await checkCompleted(matched, njEmailLower, nowISO, token, calendarOwnerEmail, attendeeCache);
         await upsertHuddle(nj.id, date, completed, calendarOwnerEmail, false, matched?.id);
         count++;
@@ -285,7 +298,7 @@ export async function GET(req: NextRequest) {
         // Check all past extended days — if any has no meeting, extension is broken
         for (const date of pastExtendedDates) {
           const dayEvents = eventsByDate[date] ?? [];
-          const matched   = dayEvents.find(e => e.subject.includes(`huddle with hr - ${njFirstName}`));
+          const matched   = dayEvents.find(e => isHuddleForNJ(e.subject, njFirstName));
           if (!matched) {
             extensionBroken = true;
             break;
@@ -299,7 +312,7 @@ export async function GET(req: NextRequest) {
         // Process today's extended date if extension is still intact
         if (!extensionBroken && todayExtended) {
           const dayEvents = eventsByDate[todayExtended] ?? [];
-          const matched   = dayEvents.find(e => e.subject.includes(`huddle with hr - ${njFirstName}`));
+          const matched   = dayEvents.find(e => isHuddleForNJ(e.subject, njFirstName));
           if (!matched) {
             extensionBroken = true; // No meeting found today → extension over
           } else {

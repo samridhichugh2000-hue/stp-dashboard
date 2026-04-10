@@ -3,7 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import {
   newJoiners, huddleLogs, dsrSubmissions, qubitScores,
-  stpTaskOverrides, assessmentChecklists,
+  stpTaskOverrides, assessmentChecklists, nrRecords,
 } from "@/lib/schema";
 import { eq, desc } from "drizzle-orm";
 
@@ -14,7 +14,7 @@ const MAILBOX       = process.env.OUTLOOK_MAILBOX!;
 
 const CHECKLIST_ITEMS = [
   { id: "training_completed",     label: "STP Training Completed"                    },
-  { id: "qubits_satisfactory",    label: "Qubits Score Satisfactory (≥70)"           },
+  { id: "qubits_satisfactory",    label: "Qubits Completed"                          },
   { id: "dsr_regular",            label: "DSR Submitted Regularly"                   },
   { id: "huddle_attendance",      label: "Huddle Attendance Complete"                },
   { id: "manager_huddle_done",    label: "Manager Huddle Completed"                  },
@@ -22,6 +22,24 @@ const CHECKLIST_ITEMS = [
   { id: "lead_audit_guidance",    label: "Lead Audit Guidance"                       },
   { id: "lead_handling_guidance", label: "Lead Handling and Self Generation Guidance"},
   { id: "sc_policy_guidance",     label: "Tentative SC Policy Guidance"              },
+];
+
+// ── STP metrics definitions (must match AssessmentChecklist component) ────────
+
+const STP_MGR_ROWS = [
+  { id: "attendance", parameter: "Attendance & Engagement",                    positiveCriteria: "Attended all Meetings?",                                              negativeCriteria: "Missed any meetings" },
+  { id: "reporting",  parameter: "Reporting Discipline",                        positiveCriteria: "Submitted DSRs Everyday",                                             negativeCriteria: "Missed any DSRs" },
+  { id: "lead_1",     parameter: "Lead Handling",                               positiveCriteria: "Positive and independent",                                            negativeCriteria: "Any miss or negligence identified" },
+  { id: "lead_2",     parameter: "Proactive and completes tasks on or before time", positiveCriteria: "Demonstrated ownership / initiative",                            negativeCriteria: "Passive or reactive behavior" },
+  { id: "wfh",        parameter: "WFH Capable",                                 positiveCriteria: "No disturbances, Joins timely, Punctual, No internet issues",        negativeCriteria: "Improvement required" },
+];
+
+const STP_HR_ROWS = [
+  { id: "attendance", parameter: "Attendance & Engagement",                         positiveCriteria: "Attended all huddles",                                                                               negativeCriteria: "Missed any huddles" },
+  { id: "reporting",  parameter: "Reporting Discipline",                             positiveCriteria: "Submitted DSRs on time",                                                                             negativeCriteria: "Missed any DSRs" },
+  { id: "audit",      parameter: "Audit Quality",                                    positiveCriteria: "Positive audit",                                                                                     negativeCriteria: "Negative audit" },
+  { id: "proactive",  parameter: "Proactive and completes STP on or before time",    positiveCriteria: "Demonstrated ownership / initiative",                                                               negativeCriteria: "Passive or reactive behaviour" },
+  { id: "wfh",        parameter: "WFH Capable",                                      positiveCriteria: "Includes - No disturbances, joins timely, Punctual, no internet issues encountered.",              negativeCriteria: "Improvement required" },
 ];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -104,7 +122,8 @@ interface ReportData {
   dsrSubmitted: Set<string>;
   qubitsByDate: Map<string, number>;
   qubitDone: Set<string>;  // dates with done qubits (score OR override)
-  latestAssessment: { outcome: string; filledAt: string; filledBy: string; checklistData: Record<string, boolean> } | null;
+  nrData: { month: number; year: number; nrValue: number; isPositive: boolean | null }[];
+  latestAssessment: { outcome: string; filledAt: string; filledBy: string; managerNotes: string | null; hrNotes: string | null; checklistData: Record<string, boolean | string> } | null;
 }
 
 // ─ primitives ─
@@ -151,10 +170,53 @@ function section(num: number, title: string, accentColor: string, body: string):
   </table>`;
 }
 
+// ─ score badge (0 / 1 / —) ─
+
+function scoreBadge(val: string): string {
+  if (val === "1") return `<span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:#d1fae5;color:#065f46;border:1px solid #6ee7b7">1</span>`;
+  if (val === "0") return `<span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:700;background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db">0</span>`;
+  return `<span style="color:#d1d5db;font-size:12px">—</span>`;
+}
+
+// ─ STP metrics table (shared for manager + HR) ─
+
+function stpMetricsTable(
+  rows: { id: string; parameter: string; positiveCriteria: string; negativeCriteria: string }[],
+  prefix: string,
+  cd: Record<string, boolean | string>,
+  scoreLabel: string,
+): string {
+  const thead = `
+    <tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb">
+      <th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;width:22%">Parameter</th>
+      <th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:0.05em;width:30%">Positive Criteria</th>
+      <th style="padding:8px 10px;text-align:center;font-size:10px;font-weight:700;color:#059669;text-transform:uppercase;letter-spacing:0.05em;width:8%">${scoreLabel}</th>
+      <th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.05em;width:30%">Negative Criteria</th>
+      <th style="padding:8px 10px;text-align:center;font-size:10px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:0.05em;width:8%">${scoreLabel}</th>
+    </tr>`;
+  const tbody = rows.map((row, i) => {
+    const aVal = String(cd[`${prefix}_${row.id}_a`] ?? "");
+    const bVal = String(cd[`${prefix}_${row.id}_b`] ?? "");
+    const bg = i % 2 === 0 ? "#fff" : "#fafafa";
+    return `
+    <tr style="background:${bg};border-top:1px solid #f3f4f6">
+      <td style="padding:8px 10px;font-size:12px;font-weight:600;color:#374151;vertical-align:top">${row.parameter}</td>
+      <td style="padding:8px 10px;font-size:12px;color:#374151;vertical-align:top">${row.positiveCriteria}</td>
+      <td style="padding:8px 10px;text-align:center;vertical-align:top">${scoreBadge(aVal)}</td>
+      <td style="padding:8px 10px;font-size:12px;color:#374151;vertical-align:top">${row.negativeCriteria}</td>
+      <td style="padding:8px 10px;text-align:center;vertical-align:top">${row.negativeCriteria ? scoreBadge(bVal) : ""}</td>
+    </tr>`;
+  }).join("");
+  return `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+    <thead>${thead}</thead>
+    <tbody>${tbody}</tbody>
+  </table>`;
+}
+
 // ─ build HTML ─
 
 function buildHtml(d: ReportData): string {
-  const { nj, wds, today, windowDates, huddleCompleted, dsrSubmitted, qubitsByDate, qubitDone, latestAssessment } = d;
+  const { nj, wds, today, windowDates, huddleCompleted, dsrSubmitted, qubitsByDate, qubitDone, latestAssessment, nrData } = d;
   const maxDays   = 14 + (nj.stpExtendedDays > 0 ? 4 : 0);
   const pastDates = windowDates.filter(dt => dt <= today);
 
@@ -176,22 +238,28 @@ function buildHtml(d: ReportData): string {
   const pct = (n: number, t: number) => t === 0 ? "–" : `${Math.round((n / t) * 100)}%`;
 
   // ── 1. Details ──
+  const totalNR = nrData.reduce((s, r) => s + (r.nrValue ?? 0), 0);
+  const nrPositive = nrData.some(r => r.isPositive);
+  const nrColor = nrData.length === 0 ? "#111827" : nrPositive ? "#059669" : "#dc2626";
+  const nrDisplay = nrData.length === 0 ? "—" : totalNR.toLocaleString("en-IN");
+  const detailRows: [string, string, string?][] = [
+    ["Employee ID",  nj.empId ?? "—"],
+    ["Join Date",    fmtDate(nj.joinDate)],
+    ["Tenure",       tenureLabel(nj.joinDate)],
+    ["Phase",        nj.currentPhase],
+    ["Manager",      nj.managerId],
+    ["Location",     nj.location ?? "—"],
+    ["Designation",  nj.designation ?? "—"],
+    ["Email",        nj.email ?? "—"],
+    ["Net Revenue",  nrDisplay, nrColor],
+    ...(nj.stpExtendedDays > 0 ? [["Extended Days", `${nj.stpExtendedDays} days`] as [string, string]] : []),
+  ];
   const detailsHtml = `
     <table width="100%" cellpadding="0" cellspacing="0">
-      ${[
-        ["Employee ID",  nj.empId ?? "—"],
-        ["Join Date",    fmtDate(nj.joinDate)],
-        ["Tenure",       tenureLabel(nj.joinDate)],
-        ["Phase",        nj.currentPhase],
-        ["Manager",      nj.managerId],
-        ["Location",     nj.location ?? "—"],
-        ["Designation",  nj.designation ?? "—"],
-        ["Email",        nj.email ?? "—"],
-        ...(nj.stpExtendedDays > 0 ? [["Extended Days", `${nj.stpExtendedDays} days`]] : []),
-      ].map(([label, val], i) => `
+      ${detailRows.map(([label, val, color], i) => `
         <tr style="${i % 2 === 0 ? "background:#f9fafb" : "background:#fff"}">
           <td style="padding:8px 12px;font-size:12px;color:#6b7280;width:140px;font-weight:500">${label}</td>
-          <td style="padding:8px 12px;font-size:12px;color:#111827;font-weight:600">${val}</td>
+          <td style="padding:8px 12px;font-size:12px;color:${color ?? "#111827"};font-weight:600">${val}</td>
         </tr>`).join("")}
     </table>`;
 
@@ -331,7 +399,17 @@ function buildHtml(d: ReportData): string {
             <td style="padding:8px 12px;font-size:12px;color:${done ? "#111827" : "#6b7280"};font-weight:${done ? "500" : "400"}">${item.label}</td>
           </tr>`;
         }).join("")}
-      </table>`;
+      </table>
+      ${latestAssessment.managerNotes ? `
+      <div style="margin-top:16px">
+        <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Manager Notes</div>
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;font-size:12px;color:#374151;line-height:1.6">${latestAssessment.managerNotes.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</div>
+      </div>` : ""}
+      ${latestAssessment.hrNotes ? `
+      <div style="margin-top:12px">
+        <div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">HR Notes</div>
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;font-size:12px;color:#374151;line-height:1.6">${latestAssessment.hrNotes.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>")}</div>
+      </div>` : ""}`;
   }
 
   // ── 5. Manager Huddle Status ──
@@ -346,6 +424,11 @@ function buildHtml(d: ReportData): string {
           <td style="padding:10px 14px;text-align:right">${statusBadge(done as boolean)}</td>
         </tr>`).join("")}
     </table>`;
+
+  // ── 6 & 7. STP Metrics by Manager and HR ──
+  const cd = latestAssessment?.checklistData ?? {};
+  const stpMgrHtml = stpMetricsTable(STP_MGR_ROWS, "stp_mgr", cd, "A / B");
+  const stpHrHtml  = stpMetricsTable(STP_HR_ROWS,  "stp_hr",  cd, "Score");
 
   // ── Assemble ──
   return `<!DOCTYPE html>
@@ -376,11 +459,13 @@ function buildHtml(d: ReportData): string {
           <tr>
             <td style="background:#ffffff;border-radius:0 0 12px 12px;padding:28px;border:1px solid #e2e8f0;border-top:none">
 
-              ${section(1, "NJ Details",                    "#374151", detailsHtml)}
-              ${section(2, "STP Phase Progress",            "#4f46e5", phaseHtml)}
+              ${section(1, "NJ Details",                        "#374151", detailsHtml)}
+              ${section(2, "STP Phase Progress",                "#4f46e5", phaseHtml)}
               ${section(3, "Day-wise Task Tracker (Days 1–14)", "#059669", trackerHtml)}
-              ${section(4, "Assessment Checklist",          "#7c3aed", assessmentHtml)}
-              ${section(5, "Manager Huddle Status",         "#0369a1", managerHtml)}
+              ${section(4, "Assessment Checklist",              "#7c3aed", assessmentHtml)}
+              ${section(5, "Manager Huddle Status",             "#0369a1", managerHtml)}
+              ${section(6, "STP Metrics — By Manager",          "#6d28d9", stpMgrHtml)}
+              ${section(7, "STP Metrics — By HR",               "#be185d", stpHrHtml)}
 
               <!-- Legend -->
               <table cellpadding="0" cellspacing="0" style="margin-top:8px;margin-bottom:20px">
@@ -437,13 +522,14 @@ export async function POST(
   const maxDays  = 14 + (nj.stpExtendedDays > 0 ? 4 : 0);
   const windowDates = Array.from({ length: maxDays }, (_, i) => getWorkingDayDate(nj.joinDate, i + 1));
 
-  const [huddles, dsrs, qubits, overrides, assessments] = await Promise.all([
+  const [huddles, dsrs, qubits, overrides, assessments, nrRows] = await Promise.all([
     db.select().from(huddleLogs).where(eq(huddleLogs.njId, njId)).all(),
     db.select().from(dsrSubmissions).where(eq(dsrSubmissions.njId, njId)).all(),
     db.select().from(qubitScores).where(eq(qubitScores.njId, njId)).all(),
     db.select().from(stpTaskOverrides).where(eq(stpTaskOverrides.njId, njId)).all(),
     db.select().from(assessmentChecklists).where(eq(assessmentChecklists.njId, njId))
       .orderBy(desc(assessmentChecklists.filledAt)).all(),
+    db.select().from(nrRecords).where(eq(nrRecords.njId, njId)).all(),
   ]);
 
   // Apply overrides
@@ -485,8 +571,16 @@ export async function POST(
     outcome:       latest.outcome,
     filledAt:      latest.filledAt,
     filledBy:      latest.filledBy,
-    checklistData: latest.checklistData ? JSON.parse(latest.checklistData) as Record<string, boolean> : {},
+    managerNotes:  latest.managerNotes ?? null,
+    hrNotes:       latest.hrNotes ?? null,
+    checklistData: latest.checklistData ? JSON.parse(latest.checklistData) as Record<string, boolean | string> : {},
   } : null;
+
+  const nrData = nrRows.map(r => ({
+    month: r.month, year: r.year,
+    nrValue: r.nrValue ?? 0,
+    isPositive: r.isPositive,
+  }));
 
   const html = buildHtml({
     nj: {
@@ -499,7 +593,7 @@ export async function POST(
     },
     wds, today, windowDates,
     huddleCompleted, dsrSubmitted, qubitsByDate, qubitDone,
-    latestAssessment,
+    latestAssessment, nrData,
   });
 
   const token = await getGraphToken();

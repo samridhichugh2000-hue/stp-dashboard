@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import type { NJ, PerformanceAlert, HuddleLog as HuddleLogType } from "@/lib/types";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
@@ -17,7 +18,7 @@ import { ExportButton } from "@/components/shared/ExportButton";
 import {
   Users, Search, X,
   Building2, MapPin, Mail, Hash, UserCircle2, CalendarDays, ChevronRight,
-  UserPlus, Calendar,
+  UserPlus, Calendar, RefreshCw,
 } from "lucide-react";
 import { fmtTenure } from "@/lib/formatTenure";
 
@@ -115,6 +116,9 @@ function initials(name: string) {
 }
 
 export default function OverviewPage() {
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "admin";
+
   const [selectedNJId, setSelectedNJId]     = useState<number | null>(null);
   const [modalNJ, setModalNJ]               = useState<NJ | null>(null);
   const [dsrHistoryNJ, setDsrHistoryNJ]     = useState<NJ | null>(null);
@@ -133,11 +137,40 @@ export default function OverviewPage() {
   const [dsrMap,        setDsrMap]        = useState<Map<number, { submittedAt: string | null }>>(new Map());
   const [dsrLoading,    setDsrLoading]    = useState(false);
 
-  useEffect(() => {
+  // Sync Now state
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncMsg,     setSyncMsg]     = useState<{ ok: boolean; text: string } | null>(null);
+
+  const fetchNJs = () => {
     fetch("/api/nj?includeInactive=true")
       .then(r => r.json()).then(setNjs).catch(() => setNjs([]));
     fetch("/api/performance/alerts")
       .then(r => r.ok ? r.json() : []).then(setAlerts).catch(() => setAlerts([]));
+  };
+
+  const syncNow = async () => {
+    setSyncLoading(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch("/api/admin/trigger-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ module: "csm" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Sync failed");
+      const synced = data.result?.synced ?? "?";
+      setSyncMsg({ ok: true, text: `Synced ${synced} NJs` });
+      fetchNJs();
+    } catch (e) {
+      setSyncMsg({ ok: false, text: e instanceof Error ? e.message : "Sync failed" });
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNJs();
   }, []);
 
   const fetchDSR = () => {
@@ -323,7 +356,27 @@ export default function OverviewPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">Monitor your new joiner pipeline in real time</p>
         </div>
-        <ExportButton />
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={syncNow}
+                disabled={syncLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+                title="Pull latest NJ list from Koenig API"
+              >
+                <RefreshCw size={13} className={syncLoading ? "animate-spin" : ""} />
+                {syncLoading ? "Syncing…" : "Sync NJs"}
+              </button>
+              {syncMsg && (
+                <span className={`text-xs font-medium ${syncMsg.ok ? "text-emerald-600" : "text-red-500"}`}>
+                  {syncMsg.text}
+                </span>
+              )}
+            </div>
+          )}
+          <ExportButton />
+        </div>
       </div>
 
       {/* KPI Summary Strip */}
