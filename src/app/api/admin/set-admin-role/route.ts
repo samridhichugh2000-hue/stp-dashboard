@@ -18,8 +18,11 @@ export async function GET(req: NextRequest) {
   if (secret !== BOOTSTRAP_SECRET) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  // No email → list all users so you can find the right one
   if (!email) {
-    return NextResponse.json({ error: "Missing ?email=" }, { status: 400 });
+    const allUsers = await db.select({ id: users.id, name: users.name, email: users.email, role: users.role }).from(users).all();
+    return NextResponse.json({ users: allUsers });
   }
 
   const user = await db.select().from(users).where(eq(users.email, email)).get();
@@ -29,5 +32,5 @@ export async function GET(req: NextRequest) {
 
   await db.update(users).set({ role: "admin" }).where(eq(users.email, email));
 
-  return NextResponse.json({ ok: true, message: `${email} is now admin. Log out and log back in.` });
+  return NextResponse.json({ ok: true, message: `${user.name} (${email}) is now admin. Log out and log back in.` });
 }
