@@ -1,0 +1,60 @@
+name: Sync Backup
+
+on:
+  schedule:
+    - cron: "0 20 * * *"      # sync-csm + sync-nr  (Vercel: 19:30 UTC)
+    - cron: "0 21 * * *"      # sync-rcb             (Vercel: 20:30 UTC)
+    - cron: "0 5  * * *"      # sync-teams-huddles   (Vercel: 04:30 UTC)
+    - cron: "30 2 * * *"      # evaluate-milestones  (Vercel: 02:00 UTC)
+    - cron: "0 14 * * 1-5"    # sync-dsr weekdays    (Vercel: 13:30 UTC)
+  workflow_dispatch:
+
+jobs:
+  sync-csm-nr:
+    if: github.event.schedule == '0 20 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync CSM
+        run: |
+          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/sync-csm" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+      - name: Sync NR
+        run: |
+          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/sync-nr" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  sync-rcb:
+    if: github.event.schedule == '0 21 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync RCB
+        run: |
+          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/sync-rcb" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  sync-huddles:
+    if: github.event.schedule == '0 5  * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync Teams Huddles
+        run: |
+          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/sync-teams-huddles" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  evaluate-milestones:
+    if: github.event.schedule == '30 2 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate Milestones
+        run: |
+          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/evaluate-milestones" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+
+  sync-dsr:
+    if: github.event.schedule == '0 14 * * 1-5' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync DSR
+        run: |
+          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/sync-dsr" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
