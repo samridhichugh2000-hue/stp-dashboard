@@ -58,7 +58,7 @@ export function NRTrendChart({ njId, njName }: Props) {
   }
 
   const sorted = [...records].sort((a, b) =>
-    a.year !== b.year ? a.year - b.year : a.month - b.month
+    a.year !== b.year ? b.year - a.year : b.month - a.month
   );
 
   const chartData = sorted.map(r => ({
@@ -67,7 +67,7 @@ export function NRTrendChart({ njId, njName }: Props) {
     isPositive: r.isPositive,
   }));
 
-  const latest = sorted[sorted.length - 1];
+  const latest = sorted[0];
   const positiveCount = records.filter(r => r.isPositive).length;
 
   return (
