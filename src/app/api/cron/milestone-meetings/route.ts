@@ -18,6 +18,7 @@ import { db, client } from "@/lib/db";
 import { newJoiners, performanceAlerts, meetingLogs } from "@/lib/schema";
 import { eq, and } from "drizzle-orm";
 import { createCalendarEvent, sendEmail } from "@/lib/msGraph";
+import { isCronAuthorized, cronForbidden } from "@/lib/cron-auth";
 
 const ADMIN_EMAIL = process.env.TEAMS_CALENDAR_OWNER_EMAIL!;
 
@@ -104,11 +105,7 @@ const MILESTONES: Milestone[] = [
 // ── route ─────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const authHeader   = req.headers.get("authorization");
-  const legacyHeader = req.headers.get("x-cron-secret");
-  const valid = authHeader === `Bearer ${process.env.CRON_SECRET}` ||
-    legacyHeader === process.env.CRON_SECRET || legacyHeader === "stp-cron-2026";
-  if (!valid) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!isCronAuthorized(req)) return cronForbidden();
 
   const today = todayIST();
 

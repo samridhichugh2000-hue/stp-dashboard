@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, client } from "@/lib/db";
 import { newJoiners, huddleLogs, nrRecords, syncLogs } from "@/lib/schema";
 import { eq, and } from "drizzle-orm";
+import { isCronAuthorized, cronForbidden } from "@/lib/cron-auth";
 
 const MODULE = "teams_huddles";
 
@@ -209,13 +210,7 @@ async function upsertSyncLog(status: "running" | "success" | "error", extra: { e
 // ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const authHeader  = req.headers.get("authorization");
-  const legacyHeader = req.headers.get("x-cron-secret");
-  const validBearer = authHeader === `Bearer ${process.env.CRON_SECRET}`;
-  const validLegacy = legacyHeader === process.env.CRON_SECRET || legacyHeader === "stp-cron-2026";
-  if (!validBearer && !validLegacy) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!isCronAuthorized(req)) return cronForbidden();
 
   const tenantId           = process.env.TEAMS_TENANT_ID;
   const clientId           = process.env.TEAMS_CLIENT_ID;

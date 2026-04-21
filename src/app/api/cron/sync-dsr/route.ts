@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, client } from "@/lib/db";
 import { dsrSubmissions, newJoiners } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { isCronAuthorized, cronForbidden } from "@/lib/cron-auth";
 
 const TENANT_ID     = process.env.OUTLOOK_TENANT_ID    ?? process.env.TEAMS_TENANT_ID!;
 const CLIENT_ID     = process.env.OUTLOOK_CLIENT_ID    ?? process.env.TEAMS_CLIENT_ID!;
@@ -66,15 +67,7 @@ async function upsertSyncLog(status: "running" | "success" | "error", extra: { e
 }
 
 export async function GET(req: NextRequest) {
-  // Accept both Vercel standard auth (Authorization: Bearer) and legacy header
-  const authHeader = req.headers.get("authorization");
-  const legacyHeader = req.headers.get("x-cron-secret");
-  const validBearer = authHeader === `Bearer ${process.env.CRON_SECRET}`;
-  const validLegacy = legacyHeader === process.env.CRON_SECRET || legacyHeader === "stp-cron-2026";
-
-  if (!validBearer && !validLegacy) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!isCronAuthorized(req)) return cronForbidden();
 
   await upsertSyncLog("running");
 

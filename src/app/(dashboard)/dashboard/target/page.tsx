@@ -76,29 +76,29 @@ export default function TargetPage() {
     };
   });
 
-  // Q1 2026 target: only CSMs whose 4-month tenure mark falls in Jan–Mar 2026
-  const Q1_START = new Date("2026-01-01");
-  const Q1_END   = new Date("2026-03-31T23:59:59");
-  const q1Base = enriched?.filter((r) => {
+  // Q2 2026 target: only CSMs whose 4-month tenure mark falls in Apr–Jun 2026
+  const Q2_START = new Date("2026-04-01");
+  const Q2_END   = new Date("2026-06-30T23:59:59");
+  const q2Base = enriched?.filter((r) => {
     const mark = new Date(r.joinDate);
     mark.setMonth(mark.getMonth() + 4);
-    return mark >= Q1_START && mark <= Q1_END;
+    return mark >= Q2_START && mark <= Q2_END;
   });
 
-  // Counts — Q1-eligible CSMs only
-  const total       = q1Base?.length ?? 0;
-  const devCount    = q1Base?.filter((r) => r.dev === true).length  ?? 0;
-  const notDevCount = q1Base?.filter((r) => r.dev === false).length ?? 0;
+  // Counts — Q2-eligible CSMs only
+  const total       = q2Base?.length ?? 0;
+  const devCount    = q2Base?.filter((r) => r.dev === true).length  ?? 0;
+  const notDevCount = q2Base?.filter((r) => r.dev === false).length ?? 0;
 const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
 
-  // Manager list — only managers with at least one Q1-eligible CSM
-  const q1ManagerList = [
-    ...new Set((q1Base ?? []).map((r) => r.manager).filter((m) => m !== "—")),
+  // Manager list — only managers with at least one Q2-eligible CSM
+  const q2ManagerList = [
+    ...new Set((q2Base ?? []).map((r) => r.manager).filter((m) => m !== "—")),
   ].sort();
 
   // Filtered rows for table (search + manager + dev-status filters on top of q1Base)
   const q = search.trim().toLowerCase();
-  const filtered = q1Base?.filter((r) => {
+  const filtered = q2Base?.filter((r) => {
     const matchesManager =
       managerFilter === "All" || r.manager === managerFilter;
     const matchesSearch = !q || r.name.toLowerCase().includes(q);
@@ -115,7 +115,7 @@ const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
 
   const statCards = [
     {
-      label: "Q1 Target",
+      label: "Q2 Target",
       value: total,
       desc: "Total active CSMs to develop",
       bg: "from-cyan-400 to-blue-500",
@@ -149,7 +149,7 @@ const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
             Target Vs Achievement
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Q1 2026 — Develop maximum CSMs (NR + ROI positive)
+            Q2 2026 — Develop maximum CSMs (NR + ROI positive)
           </p>
         </div>
         {/* Manager filter */}
@@ -173,7 +173,7 @@ const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
             className="text-sm bg-transparent text-gray-600 focus:outline-none cursor-pointer"
           >
             <option value="All">All Managers</option>
-            {q1ManagerList.map((m) => (
+            {q2ManagerList.map((m) => (
               <option key={m} value={m}>
                 {m}
               </option>
@@ -202,12 +202,12 @@ const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
         </div>
       </div>
 
-      {/* Q1 progress banner */}
+      {/* Q2 progress banner */}
       <div className="bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg">
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-sm font-medium text-white/80">
-              Q1 Development Progress
+              Q2 Development Progress
             </p>
             <p className="text-3xl font-black mt-1">
               {devCount}
@@ -366,7 +366,7 @@ const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
                     ROI Status
                   </th>
                   <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">
-                    Q1 Status
+                    Q2 Status
                   </th>
                 </tr>
               </thead>

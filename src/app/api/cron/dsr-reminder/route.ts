@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, client } from "@/lib/db";
 import { newJoiners, dsrSubmissions, reminderLogs } from "@/lib/schema";
 import { eq, and } from "drizzle-orm";
+import { isCronAuthorized, cronForbidden } from "@/lib/cron-auth";
 
 const TENANT_ID     = process.env.OUTLOOK_TENANT_ID    ?? "98deb14a-8f2f-48b2-807f-8a97c96a0ca3";
 const CLIENT_ID     = process.env.OUTLOOK_CLIENT_ID     ?? "dcb6ce18-d8cb-4cb1-a96c-86005af9d5b2";
@@ -181,11 +182,7 @@ function workingDaysSince(dojISO: string): number {
 // ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const authHeader  = req.headers.get("authorization");
-  const legacyHeader = req.headers.get("x-cron-secret");
-  const valid = authHeader === `Bearer ${process.env.CRON_SECRET}` ||
-    legacyHeader === process.env.CRON_SECRET || legacyHeader === "stp-cron-2026";
-  if (!valid) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!isCronAuthorized(req)) return cronForbidden();
 
   if (!CLIENT_SECRET || !MAILBOX)
     return NextResponse.json({ error: "Graph credentials not set" }, { status: 500 });

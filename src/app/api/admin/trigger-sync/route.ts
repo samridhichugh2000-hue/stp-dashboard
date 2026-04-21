@@ -6,8 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-
-const CRON_SECRET = process.env.CRON_SECRET ?? "stp-cron-2026";
+import { getCronSecret } from "@/lib/cron-auth";
 
 const MODULE_PATHS: Record<string, string> = {
   csm:        "/api/cron/sync-csm",
@@ -33,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   const base = req.nextUrl.origin;
   const res = await fetch(`${base}${path}`, {
-    headers: { Authorization: `Bearer ${CRON_SECRET}` },
+    headers: { Authorization: `Bearer ${getCronSecret()}` },
   });
 
   const body = await res.json();

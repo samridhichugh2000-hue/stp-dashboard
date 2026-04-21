@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { newJoiners, nrRecords, performanceAlerts } from "@/lib/schema";
 import { eq, and } from "drizzle-orm";
+import { isCronAuthorized, cronForbidden } from "@/lib/cron-auth";
 
 function workingDaysSince(dojISO: string): number {
   const doj = new Date(dojISO);
@@ -20,13 +21,7 @@ function workingDaysSince(dojISO: string): number {
 }
 
 export async function GET(req: NextRequest) {
-  const authHeader  = req.headers.get("authorization");
-  const legacyHeader = req.headers.get("x-cron-secret");
-  const valid = authHeader === `Bearer ${process.env.CRON_SECRET}` ||
-    legacyHeader === process.env.CRON_SECRET || legacyHeader === "stp-cron-2026";
-  if (!valid) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!isCronAuthorized(req)) return cronForbidden();
 
   const allNJs = await db.select().from(newJoiners).all();
   const today = new Date().toISOString().split("T")[0];

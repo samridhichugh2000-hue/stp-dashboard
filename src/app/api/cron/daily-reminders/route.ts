@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { newJoiners, huddleLogs, dsrSubmissions, performanceAlerts, reminderLogs } from "@/lib/schema";
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "@/lib/msGraph";
+import { isCronAuthorized, cronForbidden } from "@/lib/cron-auth";
 import { dailyAdminTemplate, dailyManagerTemplate } from "@/lib/emailTemplates";
 
 const ADMIN_EMAIL = process.env.TEAMS_CALENDAR_OWNER_EMAIL!;
@@ -16,13 +17,7 @@ function formatDate(iso: string): string {
 }
 
 export async function GET(req: NextRequest) {
-  const authHeader  = req.headers.get("authorization");
-  const legacyHeader = req.headers.get("x-cron-secret");
-  const valid = authHeader === `Bearer ${process.env.CRON_SECRET}` ||
-    legacyHeader === process.env.CRON_SECRET || legacyHeader === "stp-cron-2026";
-  if (!valid) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!isCronAuthorized(req)) return cronForbidden();
 
   const today = todayIso();
 

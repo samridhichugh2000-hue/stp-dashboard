@@ -12,6 +12,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { syncLogs } from "@/lib/schema";
 import { desc, eq } from "drizzle-orm";
+import { getCronSecret } from "@/lib/cron-auth";
 
 const COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 hours
 
@@ -51,7 +52,7 @@ export async function POST() {
 
   // Fire all syncs in background — don't await so the response returns immediately
   const baseUrl = process.env.NEXTAUTH_URL ?? "https://stp-dashboard-lovat.vercel.app";
-  const secret  = process.env.CRON_SECRET ?? "";
+  const secret  = getCronSecret();
 
   void Promise.allSettled(
     SYNC_ROUTES.map(path =>

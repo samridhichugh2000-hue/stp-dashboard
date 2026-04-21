@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { rcbSummary, newJoiners, syncLogs } from "@/lib/schema";
 import { eq } from "drizzle-orm";
+import { isCronAuthorized, cronForbidden } from "@/lib/cron-auth";
 
 const MODULE = "rcb";
 const API_BASE_URL = "https://api.koenig-solutions.com";
@@ -39,13 +40,7 @@ async function upsertSyncLog(status: string, extra: Record<string, unknown> = {}
 }
 
 export async function GET(req: NextRequest) {
-  const authHeader  = req.headers.get("authorization");
-  const legacyHeader = req.headers.get("x-cron-secret");
-  const valid = authHeader === `Bearer ${process.env.CRON_SECRET}` ||
-    legacyHeader === process.env.CRON_SECRET || legacyHeader === "stp-cron-2026";
-  if (!valid) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!isCronAuthorized(req)) return cronForbidden();
 
   await upsertSyncLog("running");
 
