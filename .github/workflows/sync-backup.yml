@@ -16,11 +16,11 @@ jobs:
     steps:
       - name: Sync CSM
         run: |
-          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/sync-csm" \
+          curl -s --max-time 120 -X GET "${{ secrets.APP_URL }}/api/cron/sync-csm" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
       - name: Sync NR
         run: |
-          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/sync-nr" \
+          curl -s --max-time 120 -X GET "${{ secrets.APP_URL }}/api/cron/sync-nr" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
   sync-rcb:
@@ -29,7 +29,7 @@ jobs:
     steps:
       - name: Sync RCB
         run: |
-          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/sync-rcb" \
+          curl -s --max-time 120 -X GET "${{ secrets.APP_URL }}/api/cron/sync-rcb" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
   sync-huddles:
@@ -38,7 +38,7 @@ jobs:
     steps:
       - name: Sync Teams Huddles
         run: |
-          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/sync-teams-huddles" \
+          curl -s --max-time 120 -X GET "${{ secrets.APP_URL }}/api/cron/sync-teams-huddles" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
   evaluate-milestones:
@@ -47,7 +47,7 @@ jobs:
     steps:
       - name: Evaluate Milestones
         run: |
-          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/evaluate-milestones" \
+          curl -s --max-time 120 -X GET "${{ secrets.APP_URL }}/api/cron/evaluate-milestones" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
 
   sync-dsr:
@@ -56,5 +56,5 @@ jobs:
     steps:
       - name: Sync DSR
         run: |
-          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/sync-dsr" \
+          curl -s --max-time 120 -X GET "${{ secrets.APP_URL }}/api/cron/sync-dsr" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
