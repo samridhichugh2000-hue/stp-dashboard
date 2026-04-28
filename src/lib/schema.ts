@@ -45,6 +45,8 @@ export const newJoiners = sqliteTable("new_joiners", {
   stpWipNote:      text("stp_wip_note"),
   stpWipMarkedAt:  text("stp_wip_marked_at"),
   stpWipMarkedBy:  text("stp_wip_marked_by"),
+  isActiveOverride:     integer("is_active_override", { mode: "boolean" }),
+  // null = follow API; true/false = admin-locked, immune to sync overwrites
   stpClosed:            integer("stp_closed", { mode: "boolean" }).default(false),
   stpClosedAt:          text("stp_closed_at"),
   stpClosedBy:          text("stp_closed_by"),

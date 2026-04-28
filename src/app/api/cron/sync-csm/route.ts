@@ -144,7 +144,10 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      const managerName = String(raw.ReportingManager ?? raw.ManagerName ?? raw.Manager ?? "").trim();
+      const managerName = String(
+        raw.ReportingManager ?? raw.ReportingManagerName ?? raw.ManagerName ??
+        raw.Manager ?? raw.RM ?? raw.RMName ?? ""
+      ).trim();
       if (managerName.length >= 25 && !/\s/.test(managerName) && /^[a-zA-Z0-9]+$/.test(managerName)) {
         skippedGarbage++;
         continue;
@@ -163,10 +166,21 @@ export async function GET(req: NextRequest) {
       const isActive = statusRaw.toLowerCase() === "active";
 
       const existing = await db.select().from(newJoiners).where(eq(newJoiners.empId, empId)).get();
+
+      // Respect admin-set isActiveOverride; fall back to API status
+      const resolvedIsActive =
+        existing?.isActiveOverride !== null && existing?.isActiveOverride !== undefined
+          ? existing.isActiveOverride
+          : isActive;
+
+      // Preserve existing non-empty managerId when API returns empty (protects manual fixes)
+      const resolvedManager =
+        managerName || (existing?.managerId ?? "");
+
       const record = {
         empId,
         name,
-        managerId: managerName,
+        managerId: resolvedManager,
         location: location || null,
         department: department || null,
         email: email || null,
@@ -174,7 +188,7 @@ export async function GET(req: NextRequest) {
         tenureMonths: months,
         currentPhase: derivePhase(months),
         designation: designation || null,
-        isActive,
+        isActive: resolvedIsActive,
       };
 
       if (existing) {
@@ -186,10 +200,15 @@ export async function GET(req: NextRequest) {
       count++;
     }
 
-    // Deactivate NJs no longer in the API
+    // Deactivate NJs no longer in the API (skip those with an admin-locked isActiveOverride)
     const allNJs = await db.select().from(newJoiners).all();
     for (const nj of allNJs) {
-      if (nj.empId && !upsertedEmpIds.includes(nj.empId) && nj.isActive) {
+      if (
+        nj.empId &&
+        !upsertedEmpIds.includes(nj.empId) &&
+        nj.isActive &&
+        (nj.isActiveOverride === null || nj.isActiveOverride === undefined)
+      ) {
         await db.update(newJoiners).set({ isActive: false }).where(eq(newJoiners.id, nj.id));
       }
     }
