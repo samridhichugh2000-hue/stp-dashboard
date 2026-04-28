@@ -129,18 +129,20 @@ export async function GET(req: NextRequest) {
     const upsertedEmpIds: string[] = [];
     let count = 0;
     let skippedNoDept = 0, skippedBadDOJ = 0, skippedGarbage = 0, skippedNoEmpId = 0;
+    const skippedDetails: { empId: string; reason: string; dept?: string; doj?: string }[] = [];
 
     for (const raw of rawRecords) {
       const empIdRaw = raw.EmpCode ?? raw.EmpId ?? raw.empId;
-      if (!empIdRaw) { skippedNoEmpId++; continue; }
+      if (!empIdRaw) { skippedNoEmpId++; skippedDetails.push({ empId: "(blank)", reason: "noEmpId" }); continue; }
       const empId = String(empIdRaw).trim();
-      if (!empId) { skippedNoEmpId++; continue; }
+      if (!empId) { skippedNoEmpId++; skippedDetails.push({ empId: "(blank)", reason: "noEmpId" }); continue; }
 
       const department = String(raw.Department ?? raw.Dept ?? raw.Division ?? "").trim();
       // Allow blank department (new joiners may not have it set yet in Koenig).
       // Only skip if department is explicitly something other than sales.
       if (department && !department.toLowerCase().includes("sales")) {
         skippedNoDept++;
+        skippedDetails.push({ empId, reason: "nonSalesDept", dept: department });
         continue;
       }
 
@@ -150,12 +152,13 @@ export async function GET(req: NextRequest) {
       ).trim();
       if (managerName.length >= 25 && !/\s/.test(managerName) && /^[a-zA-Z0-9]+$/.test(managerName)) {
         skippedGarbage++;
+        skippedDetails.push({ empId, reason: "garbageManager" });
         continue;
       }
 
       const dojRaw = String(raw.DOJ ?? raw.DateOfJoining ?? raw.JoiningDate ?? "").trim();
       const joinDate = parseDOJ(dojRaw);
-      if (!joinDate) { skippedBadDOJ++; continue; }
+      if (!joinDate) { skippedBadDOJ++; skippedDetails.push({ empId, reason: "badDOJ", doj: dojRaw }); continue; }
 
       const months = tenureMonths(joinDate);
       const name = String(raw.Name ?? raw.EmployeeName ?? "").trim();
@@ -218,6 +221,7 @@ export async function GET(req: NextRequest) {
       ok: true,
       synced: count,
       skipped: { noEmpId: skippedNoEmpId, nonSalesDept: skippedNoDept, badDOJ: skippedBadDOJ, garbageManager: skippedGarbage },
+      skippedDetails,
       rawTotal: rawRecords.length,
     });
   } catch (err) {
