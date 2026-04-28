@@ -35,11 +35,23 @@
     },
     {
       "path": "/api/cron/dsr-reminder",
+      "schedule": "0 18 * * 1-5"
+    },
+    {
+      "path": "/api/cron/dsr-reminder",
       "schedule": "0 19 * * 1-5"
     },
     {
       "path": "/api/cron/dsr-reminder",
+      "schedule": "0 20 * * 1-5"
+    },
+    {
+      "path": "/api/cron/dsr-reminder",
       "schedule": "0 21 * * 1-5"
+    },
+    {
+      "path": "/api/cron/dsr-reminder",
+      "schedule": "0 22 * * 1-5"
     },
     {
       "path": "/api/cron/milestone-meetings",
@@ -48,6 +60,26 @@
     {
       "path": "/api/cron/nj-morning-reminder",
       "schedule": "30 3 * * 1-5"
+    },
+    {
+      "path": "/api/cron/nj-morning-reminder",
+      "schedule": "0 5 * * 1-5"
+    },
+    {
+      "path": "/api/cron/nj-morning-reminder",
+      "schedule": "0 6 * * 1-5"
+    },
+    {
+      "path": "/api/cron/nj-morning-reminder",
+      "schedule": "0 7 * * 1-5"
+    },
+    {
+      "path": "/api/cron/nj-morning-reminder",
+      "schedule": "0 8 * * 1-5"
+    },
+    {
+      "path": "/api/cron/nj-morning-reminder",
+      "schedule": "0 9 * * 1-5"
     }
   ]
 }

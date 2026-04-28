@@ -190,11 +190,11 @@ export async function GET(req: NextRequest) {
   try {
     // Load all active NJs in STP window (wds ≤ 18, not stpClosed, has email)
     const allNJs = await db.select().from(newJoiners).where(eq(newJoiners.isActive, true)).all();
-    const stpNJs = allNJs.filter(nj =>
-      !nj.stpClosed &&
-      nj.email &&
-      workingDaysSince(nj.joinDate) <= 18
-    );
+    const stpNJs = allNJs.filter(nj => {
+      if (nj.stpClosed || !nj.email) return false;
+      const wds = workingDaysSince(nj.joinDate);
+      return wds >= 2 && wds <= 14;
+    });
 
     if (stpNJs.length === 0)
       return NextResponse.json({ ok: true, message: "No NJs in STP window", sent: 0 });

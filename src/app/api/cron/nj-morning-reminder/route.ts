@@ -1,12 +1,16 @@
 /**
  * GET /api/cron/nj-morning-reminder
  *
- * Runs at 03:30 UTC (09:00 IST) on weekdays.
- * For each active STP NJ with an email:
- *   - Reminds them to submit DSR today
- *   - Mentions if today's huddle is already done or pending
- *   - Flags any upcoming milestone (within the next 3 days)
- * Skips if already sent today (checked via reminder_logs).
+ * Runs at multiple UTC times to hit 09:00 local for each supported timezone:
+ *   03:30 UTC → 09:00 IST  (India, UTC+5:30)
+ *   05:00 UTC → 09:00 GST  (UAE, UTC+4)
+ *   06:00 UTC → 09:00 EAT  (Kenya/Qatar, UTC+3)
+ *   07:00 UTC → 09:00 SAST (South Africa, UTC+2)
+ *   08:00 UTC → 09:00 WAT  (Nigeria, UTC+1)
+ *   09:00 UTC → 09:00 GMT  (UK, UTC+0)
+ *
+ * Only sends to NJs on working days 2–14 of their STP window.
+ * Skips if already sent today (tracked per-email in reminder_logs).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,15 +20,48 @@ import { eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/msGraph";
 import { isCronAuthorized, cronForbidden } from "@/lib/cron-auth";
 
-// ── date helpers ──────────────────────────────────────────────────────────────
+// ── Timezone map (shared with dsr-reminder) ───────────────────────────────────
+
+const LOCATION_TZ: Array<[string, number]> = [
+  ["india",      5.5], ["delhi",      5.5], ["new delhi",   5.5],
+  ["mumbai",     5.5], ["bangalore",  5.5], ["bengaluru",   5.5],
+  ["chennai",    5.5], ["hyderabad",  5.5], ["kolkata",     5.5],
+  ["pune",       5.5], ["jaipur",     5.5], ["ahmedabad",   5.5],
+  ["noida",      5.5], ["gurugram",   5.5], ["gurgaon",     5.5],
+  ["lagos",      1],   ["nigeria",    1],   ["abuja",       1],
+  ["nairobi",    3],   ["kenya",      3],   ["mombasa",     3],
+  ["dubai",      4],   ["abu dhabi",  4],   ["uae",         4],
+  ["sharjah",    4],   ["doha",       3],   ["qatar",       3],
+  ["riyadh",     3],   ["saudi",      3],
+  ["london",     0],   ["uk",         0],   ["manchester",  0],
+  ["johannesburg", 2], ["south africa", 2], ["cape town",   2],
+];
+
+function tzOffset(location: string | null): number {
+  if (!location) return 5.5;
+  const loc = location.toLowerCase();
+  for (const [key, offset] of LOCATION_TZ) {
+    if (loc.includes(key)) return offset;
+  }
+  return 5.5;
+}
+
+/** Local date string (YYYY-MM-DD) for the given UTC offset */
+function localDateForOffset(offsetHours: number): string {
+  const d = new Date(Date.now() + offsetHours * 3_600_000);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** True if the NJ's local clock is in the 09:xx morning window */
+function isMorningWindow(offsetHours: number): boolean {
+  const d = new Date(Date.now() + offsetHours * 3_600_000);
+  return d.getUTCHours() === 9;
+}
+
+// ── Date helpers ──────────────────────────────────────────────────────────────
 
 function localISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function todayIST(): string {
-  const d = new Date(Date.now() + 5.5 * 3_600_000);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
 function addDays(iso: string, days: number): string {
@@ -67,7 +104,7 @@ function fmtDate(iso: string): string {
   });
 }
 
-// ── upcoming milestones ───────────────────────────────────────────────────────
+// ── Upcoming milestones ───────────────────────────────────────────────────────
 
 function getUpcomingMilestone(joinDate: string, today: string): string | null {
   const milestones = [
@@ -88,7 +125,7 @@ function getUpcomingMilestone(joinDate: string, today: string): string | null {
   return null;
 }
 
-// ── email builder ─────────────────────────────────────────────────────────────
+// ── Email builder ─────────────────────────────────────────────────────────────
 
 function buildReminderEmail(
   firstName: string,
@@ -188,54 +225,67 @@ function buildReminderEmail(
 </html>`;
 }
 
-// ── route ─────────────────────────────────────────────────────────────────────
+// ── Route ─────────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
   if (!isCronAuthorized(req)) return cronForbidden();
 
-  const today = todayIST();
+  const utcToday = new Date().toISOString().split("T")[0];
 
-  // Load all active STP NJs with email
   const allNJs = await db.select().from(newJoiners).where(eq(newJoiners.isActive, true)).all();
   const stpNJs = allNJs.filter(n => !n.stpClosed && n.email);
 
   if (stpNJs.length === 0)
     return NextResponse.json({ ok: true, message: "No NJs in STP window", sent: 0 });
 
-  // Already sent today
+  // Already sent today (UTC day) — prevents duplicates across multiple cron runs
   const sentRes = await client.execute({
     sql: `SELECT recipient_email FROM reminder_logs WHERE reminder_type = 'MorningNJ' AND sent_at >= ? AND status = 'sent'`,
-    args: [`${today}T00:00:00`],
+    args: [`${utcToday}T00:00:00`],
   });
   const alreadySent = new Set(sentRes.rows.map(r => String(r.recipient_email).toLowerCase()));
-
-  // Today's huddle and DSR data
-  const todayHuddles = await db.select().from(huddleLogs).where(eq(huddleLogs.date, today)).all();
-  const todayDSRs    = await db.select().from(dsrSubmissions).where(eq(dsrSubmissions.date, today)).all();
-
-  const huddleDoneSet = new Set(todayHuddles.filter(h => h.completed).map(h => h.njId));
-  const dsrDoneSet    = new Set(todayDSRs.map(d => d.njId));
 
   const results: { name: string; email: string; action: string }[] = [];
 
   for (const nj of stpNJs) {
-    const email = nj.email!.toLowerCase();
+    const email  = nj.email!.toLowerCase();
+    const offset = tzOffset(nj.location);
+
+    // Only process NJs whose local clock is in the 09:xx morning window
+    if (!isMorningWindow(offset)) {
+      results.push({ name: nj.name, email, action: "skipped — not 9 AM in their timezone" });
+      continue;
+    }
+
     if (alreadySent.has(email)) {
       results.push({ name: nj.name, email, action: "skipped — already sent today" });
       continue;
     }
 
-    const firstName        = nj.name.split(" ")[0];
-    const wds              = workingDaysSince(nj.joinDate, today);
-    const huddleDone       = huddleDoneSet.has(nj.id);
-    const dsrDone          = dsrDoneSet.has(nj.id);
-    const upcomingMilestone = getUpcomingMilestone(nj.joinDate, today);
+    // Use NJ's local date for all day-based calculations
+    const localToday = localDateForOffset(offset);
+    const wds        = workingDaysSince(nj.joinDate, localToday);
+
+    // Only send on working days 2–14 of STP
+    if (wds < 2 || wds > 14) {
+      results.push({ name: nj.name, email, action: `skipped — wds ${wds} outside 2–14` });
+      continue;
+    }
+
+    // Huddle and DSR status for their local today
+    const todayHuddles = await db.select().from(huddleLogs).where(eq(huddleLogs.date, localToday)).all();
+    const todayDSRs    = await db.select().from(dsrSubmissions).where(eq(dsrSubmissions.date, localToday)).all();
+    const huddleDone   = todayHuddles.some(h => h.completed && h.njId === nj.id);
+    const dsrDone      = todayDSRs.some(d => d.njId === nj.id);
+
+    const firstName         = nj.name.split(" ")[0];
+    const upcomingMilestone = getUpcomingMilestone(nj.joinDate, localToday);
 
     try {
       await sendEmail({
         to: [nj.email!],
-        subject: `☀️ Good Morning ${firstName} — STP Daily Briefing for ${fmtDate(today)}`,
-        bodyHtml: buildReminderEmail(firstName, today, wds, huddleDone, dsrDone, upcomingMilestone),
+        subject: `☀️ Good Morning ${firstName} — STP Daily Briefing for ${fmtDate(localToday)}`,
+        bodyHtml: buildReminderEmail(firstName, localToday, wds, huddleDone, dsrDone, upcomingMilestone),
       });
 
       await client.execute({
@@ -256,5 +306,5 @@ export async function GET(req: NextRequest) {
   }
 
   const sent = results.filter(r => r.action === "sent").length;
-  return NextResponse.json({ ok: true, today, sent, results });
+  return NextResponse.json({ ok: true, utcTime: new Date().toISOString(), sent, results });
 }
