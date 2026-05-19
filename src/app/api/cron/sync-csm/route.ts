@@ -180,8 +180,7 @@ export async function GET(req: NextRequest) {
       const resolvedManager =
         managerName || (existing?.managerId ?? "");
 
-      const record = {
-        empId,
+      const updateFields = {
         name,
         managerId: resolvedManager,
         location: location || null,
@@ -194,13 +193,17 @@ export async function GET(req: NextRequest) {
         isActive: resolvedIsActive,
       };
 
-      if (existing) {
-        await db.update(newJoiners).set(record).where(eq(newJoiners.empId, empId));
-      } else {
-        await db.insert(newJoiners).values({ ...record, category: "Uncategorised" });
+      try {
+        if (existing) {
+          await db.update(newJoiners).set(updateFields).where(eq(newJoiners.empId, empId));
+        } else {
+          await db.insert(newJoiners).values({ ...updateFields, empId, category: "Uncategorised" });
+        }
+        upsertedEmpIds.push(empId);
+        count++;
+      } catch (rowErr) {
+        skippedDetails.push({ empId, reason: `dbError: ${rowErr instanceof Error ? rowErr.message : String(rowErr)}` });
       }
-      upsertedEmpIds.push(empId);
-      count++;
     }
 
     // Deactivate NJs no longer in the API (skip those with an admin-locked isActiveOverride)
