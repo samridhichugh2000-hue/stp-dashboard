@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, client } from "@/lib/db";
 import { newJoiners, huddleLogs, dsrSubmissions, performanceAlerts, reminderLogs } from "@/lib/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/msGraph";
 import { isCronAuthorized, cronForbidden } from "@/lib/cron-auth";
 import { dailyAdminTemplate, dailyManagerTemplate } from "@/lib/emailTemplates";
@@ -32,6 +32,15 @@ export async function GET(req: NextRequest) {
   const allAlerts     = await db.select().from(performanceAlerts).all();
   const todayHuddles  = await db.select().from(huddleLogs).where(eq(huddleLogs.date, today)).all();
   const todayDSR      = await db.select().from(dsrSubmissions).where(eq(dsrSubmissions.date, today)).all();
+
+  const pendingMeetingsResult = await client.execute(`
+    SELECT ml.meeting_type AS meetingType, ml.scheduled_at AS scheduledAt, nj.name AS njName
+    FROM meeting_logs ml
+    INNER JOIN new_joiners nj ON nj.id = ml.nj_id
+    WHERE ml.status = 'Pending'
+    ORDER BY ml.scheduled_at ASC
+  `);
+  const pendingMeetings = pendingMeetingsResult.rows as unknown as { meetingType: string; scheduledAt: string; njName: string }[];
 
   const huddleSet = new Set(todayHuddles.filter(h => h.completed).map(h => h.njId));
   const dsrSet    = new Set(todayDSR.map(d => d.njId));
@@ -69,7 +78,7 @@ export async function GET(req: NextRequest) {
     await sendEmail({
       to:       [ADMIN_EMAIL],
       subject:  `STP Daily Summary — ${formatDate(today)}`,
-      bodyHtml: dailyAdminTemplate(formatDate(today), adminItems),
+      bodyHtml: dailyAdminTemplate(formatDate(today), adminItems, pendingMeetings),
     });
     await db.insert(reminderLogs).values({
       recipientEmail: ADMIN_EMAIL,

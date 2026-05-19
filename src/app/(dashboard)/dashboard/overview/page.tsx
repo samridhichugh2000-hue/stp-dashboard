@@ -13,6 +13,7 @@ import { HuddleLog } from "@/components/panels/overview/HuddleLog";
 import { DayTaskTracker, HuddleStatus } from "@/components/panels/overview/DayTaskTracker";
 import { NJDetailModal } from "@/components/panels/overview/NJDetailModal";
 import { DSRHistoryModal } from "@/components/panels/overview/DSRHistoryModal";
+import { PendingMeetingsAlert } from "@/components/panels/overview/PendingMeetingsAlert";
 
 import { ExportButton } from "@/components/shared/ExportButton";
 import {
@@ -398,6 +399,9 @@ export default function OverviewPage() {
           </button>
         ))}
       </div>
+
+      {/* Pending milestone meetings */}
+      <PendingMeetingsAlert />
 
       {/* Upcoming Joinings */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">

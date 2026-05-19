@@ -9,15 +9,14 @@
  *   - Join date +120 days → PIP Review   (only if PIP alert exists)
  *   - Join date +150 days → Exit Review  (only if EXIT alert exists)
  *
- * If milestone reached and no meeting yet scheduled, creates a Teams calendar
- * invite at 3:00 PM IST on that day and logs it in meeting_logs.
+ * If milestone reached and no meeting yet logged, records a "Pending" entry in
+ * meeting_logs — the dashboard alert and daily email will prompt manual scheduling.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { db, client } from "@/lib/db";
 import { newJoiners, performanceAlerts, meetingLogs } from "@/lib/schema";
-import { eq, and } from "drizzle-orm";
-import { createCalendarEvent, sendEmail } from "@/lib/msGraph";
+import { eq } from "drizzle-orm";
 import { isCronAuthorized, cronForbidden } from "@/lib/cron-auth";
 
 const ADMIN_EMAIL = process.env.TEAMS_CALENDAR_OWNER_EMAIL!;
@@ -138,36 +137,10 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Schedule at 3:00 PM IST today
-      const startIso = `${today}T15:00:00`;
-      const endIso   = `${today}T${String(15 + Math.floor(ms.durationMins / 60)).padStart(2, "0")}:${String(ms.durationMins % 60).padStart(2, "0")}:00`;
-
+      const subject = `${ms.label} — ${nj.name}`;
       const attendees = [nj.email!, ADMIN_EMAIL].filter(Boolean);
-      const subject   = `${ms.label} — ${nj.name}`;
-
-      const bodyHtml = `
-        <p>Dear ${nj.name.split(" ")[0]},</p>
-        <p>This is your scheduled <strong>${ms.label}</strong> as part of the Sales Training Programme.</p>
-        <table style="border-collapse:collapse;font-size:13px">
-          <tr><td style="padding:4px 12px 4px 0;color:#6b7280">NJ Name</td><td style="font-weight:600">${nj.name}</td></tr>
-          <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Emp ID</td><td>${nj.empId ?? "—"}</td></tr>
-          <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Join Date</td><td>${nj.joinDate}</td></tr>
-          <tr><td style="padding:4px 12px 4px 0;color:#6b7280">Meeting</td><td>${ms.label}</td></tr>
-        </table>
-        <p style="color:#6b7280;font-size:12px">Sent by STP Dashboard</p>
-      `;
 
       try {
-        const event = await createCalendarEvent({
-          subject,
-          bodyHtml,
-          startIso,
-          endIso,
-          timeZone: "India Standard Time",
-          attendees,
-          isOnlineMeeting: true,
-        });
-
         await db.insert(meetingLogs).values({
           njId:         nj.id,
           meetingType:  ms.type,
@@ -175,21 +148,12 @@ export async function GET(req: NextRequest) {
           durationMins: ms.durationMins,
           subject,
           attendees:    JSON.stringify(attendees),
-          teamsEventId: event.id,
-          teamsJoinUrl: event.joinUrl,
-          status:       "Scheduled",
+          status:       "Pending",
           createdBy:    "cron",
           createdAt:    new Date().toISOString(),
         });
 
-        // Notify admin by email
-        await sendEmail({
-          to: [ADMIN_EMAIL],
-          subject: `📅 Meeting Scheduled: ${subject}`,
-          bodyHtml: `<p>A milestone meeting has been auto-scheduled.</p>${bodyHtml}${event.joinUrl ? `<p><a href="${event.joinUrl}">Join Teams Meeting</a></p>` : ""}`,
-        });
-
-        results.push({ name: nj.name, milestone: ms.type, action: `scheduled — event ${event.id}` });
+        results.push({ name: nj.name, milestone: ms.type, action: "flagged — pending scheduling" });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         results.push({ name: nj.name, milestone: ms.type, action: `error: ${msg}` });

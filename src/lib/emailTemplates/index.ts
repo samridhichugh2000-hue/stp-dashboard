@@ -76,26 +76,63 @@ export function exitNoticeTemplate(njName: string, managerName: string, triggere
   `);
 }
 
-export function dailyAdminTemplate(date: string, items: { njName: string; issues: string[] }[]): string {
-  const rows = items.map(i =>
+const MEETING_LABEL: Record<string, string> = {
+  Phase1Review: "Manager Huddle",
+  Month1Review: "Month 1 Review",
+  PA:           "PA Review",
+  PIP:          "PIP Review",
+  EXIT:         "Exit Review",
+};
+
+export function dailyAdminTemplate(
+  date: string,
+  items: { njName: string; issues: string[] }[],
+  pendingMeetings?: { njName: string; meetingType: string; scheduledAt: string }[],
+): string {
+  const issueRows = items.map(i =>
     `<tr>
       <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600;">${i.njName}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;">${i.issues.join(" · ")}</td>
     </tr>`
   ).join("");
 
+  const meetingRows = (pendingMeetings ?? []).map(m => {
+    const label = MEETING_LABEL[m.meetingType] ?? m.meetingType;
+    const due   = new Date(m.scheduledAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    return `<tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;color:#111827;font-size:13px;font-weight:600;">${m.njName}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;">${label}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;color:#6b7280;font-size:13px;">${due}</td>
+    </tr>`;
+  }).join("");
+
+  const meetingsSection = (pendingMeetings && pendingMeetings.length > 0) ? `
+    <p style="color:#374151;font-size:13px;font-weight:600;margin:20px 0 8px;">📅 Meetings to Schedule (${pendingMeetings.length})</p>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
+      <thead>
+        <tr style="background:#eef2ff;">
+          <th style="padding:8px 12px;text-align:left;color:#4338ca;font-size:11px;font-weight:600;text-transform:uppercase;">NJ Name</th>
+          <th style="padding:8px 12px;text-align:left;color:#4338ca;font-size:11px;font-weight:600;text-transform:uppercase;">Meeting</th>
+          <th style="padding:8px 12px;text-align:left;color:#4338ca;font-size:11px;font-weight:600;text-transform:uppercase;">Due</th>
+        </tr>
+      </thead>
+      <tbody>${meetingRows}</tbody>
+    </table>` : "";
+
   return layout(`Daily STP Summary — ${date}`, `
     <p style="color:#374151;font-size:14px;">Here is today's STP action summary requiring your attention.</p>
+    ${meetingsSection}
     ${items.length === 0
-      ? `<p style="color:#059669;font-size:14px;font-weight:600;">✓ All clear — no pending actions today.</p>`
-      : `<table style="width:100%;border-collapse:collapse;margin:16px 0;">
+      ? `<p style="color:#059669;font-size:14px;font-weight:600;">✓ No pending NJ issues today.</p>`
+      : `<p style="color:#374151;font-size:13px;font-weight:600;margin:0 0 8px;">⚠️ NJ Issues (${items.length})</p>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
           <thead>
             <tr style="background:#f9fafb;">
               <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:11px;font-weight:600;text-transform:uppercase;">NJ Name</th>
               <th style="padding:8px 12px;text-align:left;color:#6b7280;font-size:11px;font-weight:600;text-transform:uppercase;">Issues</th>
             </tr>
           </thead>
-          <tbody>${rows}</tbody>
+          <tbody>${issueRows}</tbody>
         </table>`
     }
     <p style="color:#374151;font-size:14px;">Regards,<br/><strong>STP Dashboard</strong></p>
