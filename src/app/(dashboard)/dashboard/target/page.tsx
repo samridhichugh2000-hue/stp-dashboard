@@ -8,6 +8,34 @@ import type { PerformanceRow, NJ } from "@/lib/types";
 type NRROIStatus = "Positive" | "Negative" | null;
 type DevFilter = "all" | "developed" | "not-developed" | "no-data";
 
+type QuarterKey = "Q1_2026" | "Q2_2026";
+
+const QUARTERS: Record<QuarterKey, {
+  label: string;
+  short: string;
+  desc: string;
+  joinWindow: string;
+  start: Date;
+  end: Date;
+}> = {
+  Q1_2026: {
+    label: "Q1 2026",
+    short: "Q1",
+    desc: "CSMs whose 4-month mark falls in Jan–Mar 2026",
+    joinWindow: "Sep 2025 – Nov 2025",
+    start: new Date("2026-01-01"),
+    end: new Date("2026-03-31T23:59:59"),
+  },
+  Q2_2026: {
+    label: "Q2 2026",
+    short: "Q2",
+    desc: "CSMs whose 4-month mark falls in Apr–Jun 2026",
+    joinWindow: "Dec 2025 – Feb 2026",
+    start: new Date("2026-04-01"),
+    end: new Date("2026-06-30T23:59:59"),
+  },
+};
+
 function computeDev(
   nrPositiveMonth: number | null,
   roiStatus: NRROIStatus,
@@ -44,6 +72,7 @@ export default function TargetPage() {
   const [managerFilter, setManagerFilter] = useState("All");
   const [search, setSearch] = useState("");
   const [devFilter, setDevFilter] = useState<DevFilter>("all");
+  const [selectedQuarter, setSelectedQuarter] = useState<QuarterKey>("Q2_2026");
 
   const [rows, setRows] = useState<PerformanceRow[] | null>(null);
   const [njs, setNjs] = useState<NJ[] | null>(null);
@@ -76,30 +105,30 @@ export default function TargetPage() {
     };
   });
 
-  // Q2 2026 target: only CSMs whose 4-month tenure mark falls in Apr–Jun 2026
-  const Q2_START = new Date("2026-04-01");
-  const Q2_END   = new Date("2026-06-30T23:59:59");
-  const q2Base = enriched?.filter((r) => {
+  const quarter = QUARTERS[selectedQuarter];
+
+  // Filter to CSMs whose 4-month tenure mark falls in the selected quarter window
+  const qBase = enriched?.filter((r) => {
     const mark = new Date(r.joinDate);
     mark.setMonth(mark.getMonth() + 4);
-    return mark >= Q2_START && mark <= Q2_END;
+    return mark >= quarter.start && mark <= quarter.end;
   });
 
-  // Counts — Q2-eligible CSMs only
-  const total        = q2Base?.length ?? 0;
-  const devCount     = q2Base?.filter((r) => r.dev === true).length  ?? 0;
-  const notDevCount  = q2Base?.filter((r) => r.dev === false).length ?? 0;
-  const noDataCount  = q2Base?.filter((r) => r.dev === null).length  ?? 0;
+  // Reset manager filter when quarter changes would leave a stale manager selected
+  const total        = qBase?.length ?? 0;
+  const devCount     = qBase?.filter((r) => r.dev === true).length  ?? 0;
+  const notDevCount  = qBase?.filter((r) => r.dev === false).length ?? 0;
+  const noDataCount  = qBase?.filter((r) => r.dev === null).length  ?? 0;
   const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
 
-  // Manager list — only managers with at least one Q2-eligible CSM
-  const q2ManagerList = [
-    ...new Set((q2Base ?? []).map((r) => r.manager).filter((m) => m !== "—")),
+  // Manager list — only managers with at least one quarter-eligible CSM
+  const qManagerList = [
+    ...new Set((qBase ?? []).map((r) => r.manager).filter((m) => m !== "—")),
   ].sort();
 
-  // Filtered rows for table (search + manager + dev-status filters on top of q1Base)
+  // Filtered rows for table (search + manager + dev-status filters on top of qBase)
   const q = search.trim().toLowerCase();
-  const filtered = q2Base?.filter((r) => {
+  const filtered = qBase?.filter((r) => {
     const matchesManager =
       managerFilter === "All" || r.manager === managerFilter;
     const matchesSearch = !q || r.name.toLowerCase().includes(q);
@@ -116,9 +145,9 @@ export default function TargetPage() {
 
   const statCards = [
     {
-      label: "Q2 Scope",
+      label: `${quarter.short} Scope`,
       value: total,
-      desc: "CSMs in 4-month window (Apr–Jun 2026)",
+      desc: `CSMs in 4-month window (${quarter.desc.replace("CSMs whose 4-month mark falls in ", "")})`,
       bg: "from-cyan-400 to-blue-500",
     },
     {
@@ -151,65 +180,89 @@ export default function TargetPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
             Target Vs Achievement
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Q2 2026 · CSMs whose 4-month mark falls in Apr–Jun 2026
+            {quarter.label} · {quarter.desc}
           </p>
           <p className="text-xs text-gray-400 mt-0.5">
-            Qualifying join window: Dec 2025 – Feb 2026
+            Qualifying join window: {quarter.joinWindow}
           </p>
         </div>
-        {/* Manager filter */}
-        <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-white shadow-sm focus-within:ring-2 focus-within:ring-cyan-300 transition-all flex-shrink-0">
-          <svg
-            className="w-3.5 h-3.5 text-gray-400 flex-shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-            />
-          </svg>
-          <select
-            value={managerFilter}
-            onChange={(e) => setManagerFilter(e.target.value)}
-            className="text-sm bg-transparent text-gray-600 focus:outline-none cursor-pointer"
-          >
-            <option value="All">All Managers</option>
-            {q2ManagerList.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-          {managerFilter !== "All" && (
-            <button
-              onClick={() => setManagerFilter("All")}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <svg
-                className="w-3.5 h-3.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2.5}
+        <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
+          {/* Quarter selector */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+            {(Object.keys(QUARTERS) as QuarterKey[]).map((key) => (
+              <button
+                key={key}
+                onClick={() => {
+                  setSelectedQuarter(key);
+                  setManagerFilter("All");
+                  setDevFilter("all");
+                  setSearch("");
+                }}
+                className={clsx(
+                  "text-xs font-semibold px-3 py-1.5 rounded-lg transition-all",
+                  selectedQuarter === key
+                    ? "bg-white text-cyan-600 shadow-sm"
+                    : "text-gray-500 hover:text-gray-700"
+                )}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          )}
+                {QUARTERS[key].label}
+              </button>
+            ))}
+          </div>
+          {/* Manager filter */}
+          <div className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 bg-white shadow-sm focus-within:ring-2 focus-within:ring-cyan-300 transition-all">
+            <svg
+              className="w-3.5 h-3.5 text-gray-400 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+              />
+            </svg>
+            <select
+              value={managerFilter}
+              onChange={(e) => setManagerFilter(e.target.value)}
+              className="text-sm bg-transparent text-gray-600 focus:outline-none cursor-pointer"
+            >
+              <option value="All">All Managers</option>
+              {qManagerList.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+            {managerFilter !== "All" && (
+              <button
+                onClick={() => setManagerFilter("All")}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -218,7 +271,7 @@ export default function TargetPage() {
         <div className="flex items-center justify-between mb-3">
           <div>
             <p className="text-sm font-medium text-white/80">
-              Q2 Development Progress
+              {quarter.label} Development Progress
             </p>
             <p className="text-3xl font-black mt-1">
               {devCount}
@@ -379,7 +432,7 @@ export default function TargetPage() {
                     ROI Status
                   </th>
                   <th className="text-center py-2.5 px-3 text-xs font-semibold text-gray-500">
-                    Q2 Status
+                    {quarter.short} Status
                   </th>
                 </tr>
               </thead>
@@ -413,18 +466,26 @@ export default function TargetPage() {
                     </td>
                     <td className="py-2.5 px-3 text-center">
                       {row.nrStatus ? (
-                        <span
-                          className={clsx(
-                            "inline-block text-xs font-semibold px-2.5 py-1 rounded-lg ring-1 whitespace-nowrap",
-                            row.nrStatus === "Positive"
-                              ? "bg-green-100 text-green-700 ring-green-200/60"
-                              : "bg-red-100 text-red-700 ring-red-200/60"
-                          )}
-                        >
-                          {row.nrPositiveMonth !== null
-                            ? `+ve in ${row.nrPositiveMonth} mo`
-                            : row.nrStatus}
-                        </span>
+                        (() => {
+                          const hadEarly = row.nrPositiveMonth !== null;
+                          const isCurrentlyPositive = row.nrStatus === "Positive";
+                          // green: currently positive (with or without early-positive note)
+                          // amber: had early positive but has since regressed
+                          // red:   never positive / currently negative with no early record
+                          const colorClass = isCurrentlyPositive
+                            ? "bg-green-100 text-green-700 ring-green-200/60"
+                            : hadEarly
+                            ? "bg-amber-100 text-amber-700 ring-amber-200/60"
+                            : "bg-red-100 text-red-700 ring-red-200/60";
+                          const label = hadEarly
+                            ? `+ve in ${row.nrPositiveMonth} mo${!isCurrentlyPositive ? " ↓" : ""}`
+                            : row.nrStatus;
+                          return (
+                            <span className={clsx("inline-block text-xs font-semibold px-2.5 py-1 rounded-lg ring-1 whitespace-nowrap", colorClass)}>
+                              {label}
+                            </span>
+                          );
+                        })()
                       ) : (
                         <span className="text-gray-300 text-xs">—</span>
                       )}
