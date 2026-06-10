@@ -86,10 +86,11 @@ export default function TargetPage() {
   });
 
   // Counts — Q2-eligible CSMs only
-  const total       = q2Base?.length ?? 0;
-  const devCount    = q2Base?.filter((r) => r.dev === true).length  ?? 0;
-  const notDevCount = q2Base?.filter((r) => r.dev === false).length ?? 0;
-const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
+  const total        = q2Base?.length ?? 0;
+  const devCount     = q2Base?.filter((r) => r.dev === true).length  ?? 0;
+  const notDevCount  = q2Base?.filter((r) => r.dev === false).length ?? 0;
+  const noDataCount  = q2Base?.filter((r) => r.dev === null).length  ?? 0;
+  const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
 
   // Manager list — only managers with at least one Q2-eligible CSM
   const q2ManagerList = [
@@ -115,15 +116,15 @@ const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
 
   const statCards = [
     {
-      label: "Q2 Target",
+      label: "Q2 Scope",
       value: total,
-      desc: "Total active CSMs to develop",
+      desc: "CSMs in 4-month window (Apr–Jun 2026)",
       bg: "from-cyan-400 to-blue-500",
     },
     {
       label: "Achieved",
       value: devCount,
-      desc: "Developed CSMs",
+      desc: "Developed (NR + ROI positive)",
       bg: "from-emerald-400 to-teal-500",
     },
     {
@@ -132,12 +133,19 @@ const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
       desc: "Not yet developed",
       bg: "from-rose-400 to-red-500",
     },
+    {
+      label: "Awaiting Data",
+      value: noDataCount,
+      desc: "No NR / ROI records yet",
+      bg: "from-amber-400 to-orange-500",
+    },
   ];
 
   const filterPills: { label: string; value: DevFilter; count: number }[] = [
     { label: "All", value: "all", count: total },
     { label: "Developed", value: "developed", count: devCount },
     { label: "Not Developed", value: "not-developed", count: notDevCount },
+    { label: "No Data", value: "no-data", count: noDataCount },
   ];
 
   return (
@@ -149,7 +157,10 @@ const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
             Target Vs Achievement
           </h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Q2 2026 — Develop maximum CSMs (NR + ROI positive)
+            Q2 2026 · CSMs whose 4-month mark falls in Apr–Jun 2026
+          </p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Qualifying join window: Dec 2025 – Feb 2026
           </p>
         </div>
         {/* Manager filter */}
@@ -235,6 +246,8 @@ const pct = total > 0 ? Math.round((devCount / total) * 100) : 0;
           <span>{devCount} Developed</span>
           <span>·</span>
           <span>{notDevCount} Not Developed</span>
+          <span>·</span>
+          <span>{noDataCount} Awaiting Data</span>
         </div>
       </div>
 
