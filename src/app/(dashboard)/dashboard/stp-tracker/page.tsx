@@ -903,6 +903,25 @@ function STPDrawer({
   const [sent,          setSent]          = useState<string[] | null>(null);
   const [sendError,     setSendError]     = useState<string | null>(null);
 
+  // Calendar availability state (shared between huddle + meeting modals)
+  type CalEvent = { id: string; subject: string; start: string; end: string; isAllDay: boolean };
+  const [calEvents,      setCalEvents]      = useState<CalEvent[] | null>(null);
+  const [calLoading,     setCalLoading]     = useState(false);
+
+  function fetchCalendar(startDate: string, endDate: string) {
+    if (!nj.email) return;
+    setCalLoading(true);
+    fetch(`/api/nj/${nj.id}/calendar?startDate=${startDate}&endDate=${endDate}`)
+      .then(r => r.json())
+      .then(d => setCalEvents(d.events ?? []))
+      .catch(() => setCalEvents([]))
+      .finally(() => setCalLoading(false));
+  }
+
+  function fmtTime(iso: string) {
+    return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+  }
+
   // Huddle auto-schedule state
   const [huddleModal,   setHuddleModal]   = useState(false);
   const [huddleTime,    setHuddleTime]    = useState("09:00");
@@ -1096,13 +1115,24 @@ function STPDrawer({
           <Mail size={13} /> Email Report
         </button>
         <button
-          onClick={() => { setHuddleModal(true); setHuddleDone(null); setHuddleError(null); }}
+          onClick={() => {
+            setHuddleModal(true); setHuddleDone(null); setHuddleError(null); setCalEvents(null);
+            // Fetch calendar for Day 2 → Day 14 window
+            function getWD(base: string, n: number): string {
+              const [y,m,d] = base.split("-").map(Number);
+              const dt = new Date(y, m-1, d);
+              let count = 0;
+              while (count < n) { dt.setDate(dt.getDate()+1); if (dt.getDay()!==0 && dt.getDay()!==6) count++; }
+              return dt.toISOString().slice(0,10);
+            }
+            fetchCalendar(getWD(nj.joinDate, 1), getWD(nj.joinDate, 13));
+          }}
           className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-cyan-50 text-cyan-700 border border-cyan-200 hover:bg-cyan-100 transition-colors"
         >
           <Repeat2 size={13} /> Auto Huddles
         </button>
         <button
-          onClick={() => { setMeetingModal(true); setMeetingDone(null); setMeetingError(null); }}
+          onClick={() => { setMeetingModal(true); setMeetingDone(null); setMeetingError(null); setCalEvents(null); if (meetingDate) fetchCalendar(meetingDate, meetingDate); }}
           className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
         >
           <Video size={13} /> Schedule Meeting
@@ -1318,6 +1348,30 @@ function STPDrawer({
                   />
                 </div>
 
+                {/* Calendar availability */}
+                {nj.email && (
+                  <div>
+                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-2">
+                      {nj.name}&apos;s Calendar (Day 2 – Day 14)
+                    </label>
+                    {calLoading && <p className="text-xs text-gray-400 py-2">Loading calendar…</p>}
+                    {!calLoading && calEvents !== null && calEvents.length === 0 && (
+                      <p className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">No existing events in this window ✓</p>
+                    )}
+                    {!calLoading && calEvents !== null && calEvents.length > 0 && (
+                      <div className="max-h-36 overflow-y-auto space-y-1 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
+                        {calEvents.filter(e => !e.isAllDay).map(e => (
+                          <div key={e.id} className="flex items-center justify-between text-[11px]">
+                            <span className="text-amber-700 font-medium truncate max-w-[60%]">{e.subject}</span>
+                            <span className="text-amber-500 flex-shrink-0 ml-2">{fmtTime(e.start)} – {fmtTime(e.end)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {!nj.email && <p className="text-xs text-gray-400">No email on record — calendar unavailable</p>}
+                  </div>
+                )}
+
                 {huddleError && (
                   <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{huddleError}</p>
                 )}
@@ -1418,7 +1472,7 @@ function STPDrawer({
                   <input
                     type="date"
                     value={meetingDate}
-                    onChange={e => setMeetingDate(e.target.value)}
+                    onChange={e => { setMeetingDate(e.target.value); if (e.target.value) fetchCalendar(e.target.value, e.target.value); }}
                     className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-gray-50"
                   />
                 </div>
@@ -1446,6 +1500,29 @@ function STPDrawer({
                   </select>
                 </div>
               </div>
+
+              {/* Calendar availability for selected date */}
+              {meetingDate && nj.email && (
+                <div>
+                  <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-2">
+                    {nj.name}&apos;s Calendar on {new Date(meetingDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
+                  </label>
+                  {calLoading && <p className="text-xs text-gray-400">Loading calendar…</p>}
+                  {!calLoading && calEvents !== null && calEvents.filter(e => !e.isAllDay).length === 0 && (
+                    <p className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">Free all day ✓</p>
+                  )}
+                  {!calLoading && calEvents !== null && calEvents.filter(e => !e.isAllDay).length > 0 && (
+                    <div className="space-y-1 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
+                      {calEvents.filter(e => !e.isAllDay).map(e => (
+                        <div key={e.id} className="flex items-center justify-between text-[11px]">
+                          <span className="text-amber-700 font-medium truncate max-w-[60%]">{e.subject}</span>
+                          <span className="text-amber-500 flex-shrink-0 ml-2">{fmtTime(e.start)} – {fmtTime(e.end)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Recurring */}
               <div>
