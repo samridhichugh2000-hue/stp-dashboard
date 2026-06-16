@@ -1559,6 +1559,7 @@ function STPDrawer({
                     value={meetingTime}
                     onChange={e => setMeetingTime(e.target.value)}
                     className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-300 bg-gray-50"
+                    title="Or pick from available slots below"
                   />
                 </div>
                 <div>
@@ -1578,27 +1579,85 @@ function STPDrawer({
               </div>
 
               {/* Calendar availability for selected date */}
-              {meetingDate && nj.email && (
-                <div>
-                  <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-2">
-                    {nj.name}&apos;s Calendar on {new Date(meetingDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
-                  </label>
-                  {calLoading && <p className="text-xs text-gray-400">Loading calendar…</p>}
-                  {!calLoading && calEvents !== null && calEvents.filter(e => !e.isAllDay).length === 0 && (
-                    <p className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">Free all day ✓</p>
-                  )}
-                  {!calLoading && calEvents !== null && calEvents.filter(e => !e.isAllDay).length > 0 && (
-                    <div className="space-y-1 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
-                      {calEvents.filter(e => !e.isAllDay).map(e => (
-                        <div key={e.id} className="flex items-center justify-between text-[11px]">
-                          <span className="text-amber-700 font-medium truncate max-w-[60%]">{e.subject}</span>
-                          <span className="text-amber-500 flex-shrink-0 ml-2">{fmtTime(e.start)} – {fmtTime(e.end)}</span>
-                        </div>
-                      ))}
+              {meetingDate && nj.email && (() => {
+                const toMins = (iso: string) => { const t = iso.includes("T") ? iso.split("T")[1] : "00:00"; const [h,m] = t.split(":").map(Number); return h*60+m; };
+                const fmtSlotM = (key: string) => { const [h,m] = key.split(":").map(Number); const ap = h<12?"AM":"PM"; return `${h%12||12}:${String(m).padStart(2,"0")} ${ap}`; };
+                const dayEvs = (calEvents ?? []).filter(e => !e.isAllDay && e.start.startsWith(meetingDate));
+                const meetingSlots: Record<string, "free"|"busy"> = {};
+                for (let h = 9; h <= 17; h++) {
+                  for (const min of [0, 30]) {
+                    if (h === 17 && min === 30) continue;
+                    const key = `${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`;
+                    const sS = h*60+min, sE = sS+meetingDur;
+                    meetingSlots[key] = dayEvs.some(e => toMins(e.start) < sE && toMins(e.end) > sS) ? "busy" : "free";
+                  }
+                }
+                const freeSlots = Object.entries(meetingSlots).filter(([,s]) => s === "free");
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                        Available Slots — {new Date(meetingDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
+                      </label>
+                      <div className="flex items-center gap-2 text-[10px]">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"/>Free</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-300 inline-block"/>Busy</span>
+                      </div>
                     </div>
-                  )}
-                </div>
-              )}
+
+                    {calLoading && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {Array.from({length:8}).map((_,i) => <div key={i} className="h-8 w-20 rounded-lg bg-gray-100 animate-pulse"/>)}
+                      </div>
+                    )}
+
+                    {!calLoading && calEvents !== null && freeSlots.length === 0 && (
+                      <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-xl px-3 py-2">No free slots found for this day</p>
+                    )}
+
+                    {!calLoading && calEvents !== null && (
+                      <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pb-1">
+                        {Object.entries(meetingSlots).map(([key, st]) => {
+                          const selected = meetingTime === key;
+                          return (
+                            <button
+                              key={key}
+                              disabled={st === "busy"}
+                              onClick={() => setMeetingTime(key)}
+                              className={clsx(
+                                "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all",
+                                st === "busy"
+                                  ? "bg-red-50 text-red-300 border-red-100 cursor-not-allowed line-through"
+                                  : selected
+                                    ? "bg-emerald-500 text-white border-emerald-600 shadow-sm"
+                                    : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                              )}
+                            >
+                              {fmtSlotM(key)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {!calLoading && dayEvs.length > 0 && (
+                      <details className="mt-2 text-[11px]">
+                        <summary className="cursor-pointer text-gray-400 hover:text-gray-600 font-medium select-none">
+                          View existing events ({dayEvs.length})
+                        </summary>
+                        <div className="mt-1.5 space-y-1 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 max-h-24 overflow-y-auto">
+                          {dayEvs.map(e => (
+                            <div key={e.id} className="flex items-center justify-between">
+                              <span className="text-gray-600 truncate max-w-[60%]">{e.subject}</span>
+                              <span className="text-gray-400 flex-shrink-0 ml-2">{fmtTime(e.start)} – {fmtTime(e.end)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Recurring */}
               <div>
