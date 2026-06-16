@@ -1278,7 +1278,7 @@ function STPDrawer({
 
     {/* Auto-Schedule Daily Huddles Modal */}
     {huddleModal && (() => {
-      // Compute Day 2 and Day 14 dates for display
+      // Compute nth weekday from join date
       function getNthWD(joinDate: string, n: number): string {
         const [y, mo, da] = joinDate.split("-").map(Number);
         const d = new Date(y, mo - 1, da);
@@ -1286,8 +1286,42 @@ function STPDrawer({
         while (count < n) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) count++; }
         return d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
       }
-      const day2 = getNthWD(nj.joinDate, 1);
+      function getNthWDDate(joinDate: string, n: number): string {
+        const [y, mo, da] = joinDate.split("-").map(Number);
+        const d = new Date(y, mo - 1, da);
+        let count = 0;
+        while (count < n) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) count++; }
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      }
+      const day2  = getNthWD(nj.joinDate, 1);
       const day14 = getNthWD(nj.joinDate, 13);
+
+      // Compute slot availability across all 13 weekdays
+      type SlotStatus = "free" | "partial" | "busy";
+      const slotStatuses: Record<string, SlotStatus> = {};
+      if (calEvents !== null) {
+        const weekdayDates = Array.from({ length: 13 }, (_, i) => getNthWDDate(nj.joinDate, i + 1));
+        const toMins = (iso: string) => { const t = iso.includes("T") ? iso.split("T")[1] : "00:00"; const [h,m] = t.split(":").map(Number); return h*60+m; };
+        for (let h = 9; h <= 17; h++) {
+          for (const min of [0, 30]) {
+            if (h === 17 && min === 30) continue;
+            const key = `${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`;
+            const slotS = h*60+min, slotE = slotS+15;
+            let conflicts = 0;
+            for (const dateStr of weekdayDates) {
+              const dayEvs = calEvents.filter(e => !e.isAllDay && e.start.startsWith(dateStr));
+              if (dayEvs.some(e => toMins(e.start) < slotE && toMins(e.end) > slotS)) conflicts++;
+            }
+            slotStatuses[key] = conflicts === 0 ? "free" : conflicts <= 3 ? "partial" : "busy";
+          }
+        }
+      }
+      const fmtSlot = (key: string) => {
+        const [h, m] = key.split(":").map(Number);
+        const ampm = h < 12 ? "AM" : "PM";
+        const h12  = h % 12 || 12;
+        return `${h12}:${String(m).padStart(2,"0")} ${ampm}`;
+      };
       return (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
@@ -1337,39 +1371,81 @@ function STPDrawer({
                   </div>
                 </div>
 
-                {/* Time picker */}
+                {/* Available slots + time picker */}
                 <div>
-                  <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-2">Daily Meeting Time (IST)</label>
-                  <input
-                    type="time"
-                    value={huddleTime}
-                    onChange={e => setHuddleTime(e.target.value)}
-                    className="w-full text-sm border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-300 bg-gray-50 text-center font-semibold text-lg"
-                  />
-                </div>
-
-                {/* Calendar availability */}
-                {nj.email && (
-                  <div>
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider block mb-2">
-                      {nj.name}&apos;s Calendar (Day 2 – Day 14)
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                      {nj.email ? "Pick a Slot (IST)" : "Daily Meeting Time (IST)"}
                     </label>
-                    {calLoading && <p className="text-xs text-gray-400 py-2">Loading calendar…</p>}
-                    {!calLoading && calEvents !== null && calEvents.length === 0 && (
-                      <p className="text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2">No existing events in this window ✓</p>
-                    )}
-                    {!calLoading && calEvents !== null && calEvents.length > 0 && (
-                      <div className="max-h-36 overflow-y-auto space-y-1 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
-                        {calEvents.filter(e => !e.isAllDay).map(e => (
-                          <div key={e.id} className="flex items-center justify-between text-[11px]">
-                            <span className="text-amber-700 font-medium truncate max-w-[60%]">{e.subject}</span>
-                            <span className="text-amber-500 flex-shrink-0 ml-2">{fmtTime(e.start)} – {fmtTime(e.end)}</span>
-                          </div>
-                        ))}
+                    {nj.email && (
+                      <div className="flex items-center gap-2.5 text-[10px]">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"/>Free all days</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/>Some conflicts</span>
                       </div>
                     )}
-                    {!nj.email && <p className="text-xs text-gray-400">No email on record — calendar unavailable</p>}
                   </div>
+
+                  {calLoading && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {Array.from({length:10}).map((_,i) => <div key={i} className="h-8 w-20 rounded-lg bg-gray-100 animate-pulse"/>)}
+                    </div>
+                  )}
+
+                  {!calLoading && nj.email && calEvents !== null && (
+                    <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pb-1">
+                      {Object.entries(slotStatuses)
+                        .filter(([, st]) => st !== "busy")
+                        .map(([key, st]) => {
+                          const selected = huddleTime === key;
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => setHuddleTime(key)}
+                              className={clsx(
+                                "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all",
+                                selected
+                                  ? st === "free"
+                                    ? "bg-emerald-500 text-white border-emerald-600 shadow-sm"
+                                    : "bg-amber-500 text-white border-amber-600 shadow-sm"
+                                  : st === "free"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                    : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                              )}
+                            >
+                              {fmtSlot(key)}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  )}
+
+                  {/* Fallback manual time input */}
+                  <div className="mt-3">
+                    <label className="text-[10px] text-gray-400 block mb-1">Or enter a custom time</label>
+                    <input
+                      type="time"
+                      value={huddleTime}
+                      onChange={e => setHuddleTime(e.target.value)}
+                      className="w-full text-sm border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-cyan-300 bg-gray-50 text-center font-semibold"
+                    />
+                  </div>
+                </div>
+
+                {/* Existing events list */}
+                {!calLoading && calEvents !== null && calEvents.filter(e => !e.isAllDay).length > 0 && (
+                  <details className="text-[11px]">
+                    <summary className="cursor-pointer text-gray-400 hover:text-gray-600 font-medium select-none">
+                      View existing events ({calEvents.filter(e => !e.isAllDay).length})
+                    </summary>
+                    <div className="mt-2 max-h-28 overflow-y-auto space-y-1 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+                      {calEvents.filter(e => !e.isAllDay).map(e => (
+                        <div key={e.id} className="flex items-center justify-between">
+                          <span className="text-gray-600 truncate max-w-[60%]">{e.subject}</span>
+                          <span className="text-gray-400 flex-shrink-0 ml-2">{fmtTime(e.start)} – {fmtTime(e.end)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
                 )}
 
                 {huddleError && (
