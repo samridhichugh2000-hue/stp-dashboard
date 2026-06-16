@@ -48,15 +48,11 @@ function parseDoj(raw: string | null): Date | null {
 }
 
 function isUpcomingJoining(j: UpcomingJoining): boolean {
-  // Email must be recent (last 45 days)
+  if (j.status !== "pending") return false;
   if (!j.emailReceivedAt) return false;
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 45);
+  cutoff.setMonth(cutoff.getMonth() - 2);
   if (new Date(j.emailReceivedAt) < cutoff) return false;
-  // DOJ must be today or future (if parseable)
-  const today = new Date(); today.setHours(0,0,0,0);
-  const doj = parseDoj(j.tentativeDoj);
-  if (doj !== null && doj < today) return false;
   return true;
 }
 
@@ -209,17 +205,14 @@ export default function OverviewPage() {
   useEffect(() => { fetchJoinings(); }, []);
 
   const updateJoiningStatus = async (id: number, status: string) => {
-    // Optimistic update
-    setJoinings(prev => prev?.map(j => j.id === id ? { ...j, status } : j) ?? prev);
+    setJoinings(prev => prev?.filter(j => j.id !== id) ?? prev);
     try {
-      const res = await fetch("/api/outlook/joinings", {
+      await fetch("/api/outlook/joinings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, status }),
       });
-      if (!res.ok) throw new Error("Failed");
     } catch {
-      // Revert on failure
       fetchJoinings();
     }
   };
@@ -467,7 +460,6 @@ export default function OverviewPage() {
                   <th className="text-left py-2.5 px-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Country</th>
                   <th className="text-left py-2.5 px-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Tentative DOJ</th>
                   <th className="text-left py-2.5 px-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Email Received</th>
-                  <th className="text-center py-2.5 px-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Status</th>
                   <th className="text-center py-2.5 px-4 text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Action</th>
                 </tr>
               </thead>
@@ -478,16 +470,8 @@ export default function OverviewPage() {
                     ? new Date(j.emailReceivedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
                     : "—";
 
-                  const statusStyle =
-                    j.status === "joined"      ? "bg-emerald-100 text-emerald-700 ring-emerald-200" :
-                    j.status === "backed_out"  ? "bg-red-100 text-red-700 ring-red-200" :
-                                                 "bg-amber-100 text-amber-700 ring-amber-200";
-                  const statusLabel =
-                    j.status === "joined"     ? "Joined" :
-                    j.status === "backed_out" ? "Backed Out" : "Pending";
-
                   return (
-                    <tr key={j.id} className={`hover:bg-gray-50 transition-colors ${j.status !== "pending" ? "opacity-60" : ""}`}>
+                    <tr key={j.id} className="hover:bg-gray-50 transition-colors">
                       <td className="py-2.5 px-4 text-xs text-gray-300">{i + 1}</td>
 
                       <td className="py-2.5 px-4">
@@ -515,33 +499,19 @@ export default function OverviewPage() {
                         {receivedDate}
                       </td>
 
-                      <td className="py-2.5 px-4 text-center">
-                        <span className={`inline-block text-[10px] font-semibold px-2 py-1 rounded-lg ring-1 ${statusStyle}`}>
-                          {statusLabel}
-                        </span>
-                      </td>
-
                       <td className="py-2.5 px-4">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
-                            onClick={() => updateJoiningStatus(j.id, j.status === "joined" ? "pending" : "joined")}
-                            className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg transition-colors ${
-                              j.status === "joined"
-                                ? "bg-emerald-600 text-white ring-1 ring-emerald-700"
-                                : "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"
-                            }`}
+                            onClick={() => updateJoiningStatus(j.id, "joined")}
+                            className="text-[10px] font-semibold px-2.5 py-1 rounded-lg transition-colors bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"
                           >
-                            {j.status === "joined" ? "✓ Joined" : "Mark Joined"}
+                            Joined
                           </button>
                           <button
-                            onClick={() => updateJoiningStatus(j.id, j.status === "backed_out" ? "pending" : "backed_out")}
-                            className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg transition-colors ${
-                              j.status === "backed_out"
-                                ? "bg-red-600 text-white ring-1 ring-red-700"
-                                : "bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100"
-                            }`}
+                            onClick={() => updateJoiningStatus(j.id, "backed_out")}
+                            className="text-[10px] font-semibold px-2.5 py-1 rounded-lg transition-colors bg-red-50 text-red-700 ring-1 ring-red-200 hover:bg-red-100"
                           >
-                            {j.status === "backed_out" ? "✗ Backed Out" : "Backed Out"}
+                            Backed Out
                           </button>
                         </div>
                       </td>
