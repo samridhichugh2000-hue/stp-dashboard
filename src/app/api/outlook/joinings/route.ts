@@ -233,14 +233,22 @@ export async function GET() {
       }
     }
 
-    // Return all records, newest email first
+    // Return all records, newest email first — deduplicated by name (keep latest per person)
     const all = await db
       .select()
       .from(joiningLeads)
       .orderBy(sql`email_received_at DESC`)
       .all();
 
-    return NextResponse.json(all);
+    const seen = new Set<string>();
+    const deduped = all.filter(r => {
+      const key = r.name.trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return NextResponse.json(deduped);
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Unknown error" },
