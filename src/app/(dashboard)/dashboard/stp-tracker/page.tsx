@@ -1374,15 +1374,14 @@ function STPDrawer({
                 {/* Available slots + time picker */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                      {nj.email ? "Pick a Slot (IST)" : "Daily Meeting Time (IST)"}
-                    </label>
-                    {nj.email && (
+                    <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Pick a Slot (IST)</label>
+                    {nj.email && calEvents !== null && (
                       <div className="flex items-center gap-2.5 text-[10px]">
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"/>Free all days</span>
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/>Some conflicts</span>
                       </div>
                     )}
+                    {!nj.email && <span className="text-[10px] text-gray-400">No email on record — showing all slots</span>}
                   </div>
 
                   {calLoading && (
@@ -1391,11 +1390,14 @@ function STPDrawer({
                     </div>
                   )}
 
-                  {!calLoading && nj.email && calEvents !== null && (
+                  {!calLoading && (
                     <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pb-1">
-                      {Object.entries(slotStatuses)
-                        .filter(([, st]) => st !== "busy")
-                        .map(([key, st]) => {
+                      {(() => {
+                        const allSlots: string[] = [];
+                        for (let h = 9; h <= 17; h++) for (const min of [0, 30]) { if (h === 17 && min === 30) continue; allSlots.push(`${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`); }
+                        return allSlots.map(key => {
+                          const st = slotStatuses[key] ?? "free";
+                          if (st === "busy") return null;
                           const selected = huddleTime === key;
                           return (
                             <button
@@ -1404,22 +1406,19 @@ function STPDrawer({
                               className={clsx(
                                 "px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all",
                                 selected
-                                  ? st === "free"
-                                    ? "bg-emerald-500 text-white border-emerald-600 shadow-sm"
-                                    : "bg-amber-500 text-white border-amber-600 shadow-sm"
-                                  : st === "free"
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                                    : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                                  ? st === "partial" ? "bg-amber-500 text-white border-amber-600 shadow-sm" : "bg-emerald-500 text-white border-emerald-600 shadow-sm"
+                                  : st === "partial" ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
                               )}
                             >
                               {fmtSlot(key)}
                             </button>
                           );
-                        })}
+                        });
+                      })()}
                     </div>
                   )}
 
-                  {/* Fallback manual time input */}
+                  {/* Custom time input */}
                   <div className="mt-3">
                     <label className="text-[10px] text-gray-400 block mb-1">Or enter a custom time</label>
                     <input
@@ -1579,20 +1578,18 @@ function STPDrawer({
               </div>
 
               {/* Calendar availability for selected date */}
-              {meetingDate && nj.email && (() => {
+              {meetingDate && (() => {
                 const toMins = (iso: string) => { const t = iso.includes("T") ? iso.split("T")[1] : "00:00"; const [h,m] = t.split(":").map(Number); return h*60+m; };
                 const fmtSlotM = (key: string) => { const [h,m] = key.split(":").map(Number); const ap = h<12?"AM":"PM"; return `${h%12||12}:${String(m).padStart(2,"0")} ${ap}`; };
                 const dayEvs = (calEvents ?? []).filter(e => !e.isAllDay && e.start.startsWith(meetingDate));
+                const allSlots: string[] = [];
+                for (let h = 9; h <= 17; h++) for (const min of [0, 30]) { if (h === 17 && min === 30) continue; allSlots.push(`${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`); }
                 const meetingSlots: Record<string, "free"|"busy"> = {};
-                for (let h = 9; h <= 17; h++) {
-                  for (const min of [0, 30]) {
-                    if (h === 17 && min === 30) continue;
-                    const key = `${String(h).padStart(2,"0")}:${String(min).padStart(2,"0")}`;
-                    const sS = h*60+min, sE = sS+meetingDur;
-                    meetingSlots[key] = dayEvs.some(e => toMins(e.start) < sE && toMins(e.end) > sS) ? "busy" : "free";
-                  }
+                for (const key of allSlots) {
+                  const [hh, mm] = key.split(":").map(Number);
+                  const sS = hh*60+mm, sE = sS+meetingDur;
+                  meetingSlots[key] = (calEvents !== null && dayEvs.some(e => toMins(e.start) < sE && toMins(e.end) > sS)) ? "busy" : "free";
                 }
-                const freeSlots = Object.entries(meetingSlots).filter(([,s]) => s === "free");
                 return (
                   <div>
                     <div className="flex items-center justify-between mb-2">
@@ -1601,7 +1598,8 @@ function STPDrawer({
                       </label>
                       <div className="flex items-center gap-2 text-[10px]">
                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"/>Free</span>
-                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-300 inline-block"/>Busy</span>
+                        {nj.email && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-300 inline-block"/>Busy</span>}
+                        {!nj.email && <span className="text-gray-400">No email — calendar unavailable</span>}
                       </div>
                     </div>
 
@@ -1611,13 +1609,10 @@ function STPDrawer({
                       </div>
                     )}
 
-                    {!calLoading && calEvents !== null && freeSlots.length === 0 && (
-                      <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-xl px-3 py-2">No free slots found for this day</p>
-                    )}
-
-                    {!calLoading && calEvents !== null && (
+                    {!calLoading && (
                       <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pb-1">
-                        {Object.entries(meetingSlots).map(([key, st]) => {
+                        {allSlots.map(key => {
+                          const st = meetingSlots[key];
                           const selected = meetingTime === key;
                           return (
                             <button
