@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { CalendarClock } from "lucide-react";
 
 interface PendingMeeting {
+  id:          number;
   njId:        number;
   meetingType: string;
   subject:     string;
@@ -34,6 +35,7 @@ function fmtDate(iso: string): string {
 
 export function PendingMeetingsAlert() {
   const [meetings, setMeetings] = useState<PendingMeeting[] | null>(null);
+  const [dismissing, setDismissing] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     fetch("/api/meetings/pending")
@@ -41,6 +43,20 @@ export function PendingMeetingsAlert() {
       .then(data => setMeetings(Array.isArray(data) ? data : []))
       .catch(() => setMeetings([]));
   }, []);
+
+  async function handleAction(id: number, status: "Completed" | "Cancelled") {
+    setDismissing(prev => new Set(prev).add(id));
+    try {
+      await fetch("/api/meetings/pending", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status }),
+      });
+    } finally {
+      setMeetings(prev => prev?.filter(m => m.id !== id) ?? null);
+      setDismissing(prev => { const s = new Set(prev); s.delete(id); return s; });
+    }
+  }
 
   if (!meetings || meetings.length === 0) return null;
 
@@ -52,7 +68,6 @@ export function PendingMeetingsAlert() {
         </div>
         <div>
           <h2 className="text-sm font-semibold text-gray-700">Meetings to Schedule</h2>
-          <p className="text-[11px] text-gray-400">These milestone meetings are due — please schedule them manually</p>
         </div>
         <span className="ml-auto text-xs font-bold text-white bg-indigo-500 px-2.5 py-0.5 rounded-full">
           {meetings.length}
@@ -60,10 +75,11 @@ export function PendingMeetingsAlert() {
       </div>
 
       <div className="divide-y divide-gray-50">
-        {meetings.map((m, i) => {
+        {meetings.map((m) => {
           const s = MEETING_STYLE[m.meetingType] ?? MEETING_STYLE.Phase1Review;
+          const busy = dismissing.has(m.id);
           return (
-            <div key={i} className={`flex items-center gap-4 px-5 py-3 ${s.bg}`}>
+            <div key={m.id} className={`flex items-center gap-4 px-5 py-3 ${s.bg}`}>
               <CalendarClock size={14} className="text-indigo-400 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -75,6 +91,22 @@ export function PendingMeetingsAlert() {
                 <p className="text-[10px] text-gray-400 mt-0.5">
                   {m.njEmpId ? `${m.njEmpId} · ` : ""}Due {fmtDate(m.scheduledAt)}
                 </p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  disabled={busy}
+                  onClick={() => handleAction(m.id, "Cancelled")}
+                  className="text-[11px] px-2.5 py-1 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-100 disabled:opacity-40 transition-colors"
+                >
+                  Not Required
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() => handleAction(m.id, "Completed")}
+                  className="text-[11px] px-2.5 py-1 rounded-md border border-green-200 text-green-700 bg-green-50 hover:bg-green-100 disabled:opacity-40 transition-colors"
+                >
+                  Done
+                </button>
               </div>
             </div>
           );
