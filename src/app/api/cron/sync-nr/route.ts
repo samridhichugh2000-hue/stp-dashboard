@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     const today = new Date();
     const startDate = new Date(today.getFullYear(), today.getMonth() - 12, 1);
     const pad = (n: number) => String(n).padStart(2, "0");
-    const fmt = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00:00`;
 
     const { accessToken, deviceToken } = await getAuthToken();
 
