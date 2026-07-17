@@ -5,11 +5,11 @@ import { clsx } from "clsx";
 import type { SyncLog } from "@/lib/types";
 
 const MODULE_LABELS: Record<string, string> = {
-  Qubits: "Qubits",
-  Leads: "Leads",
-  NRD: "NRD",
-  ROI: "ROI",
-  RCB: "RCB",
+  csm: "CSM",
+  nr: "NRD",
+  rcb: "RCB",
+  dsr_sync: "DSR",
+  teams_huddles: "Huddles",
 };
 
 function formatRelative(iso: string) {
