@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "next build --turbopack",
   "crons": [
     {
       "path": "/api/cron/sync-csm",
