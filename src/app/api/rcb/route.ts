@@ -47,6 +47,8 @@ export async function GET(req: NextRequest) {
         claimedCorporates: s?.claimedCorporates ?? 0,
         nrFromCorporates: s?.nrFromCorporates ?? 0,
         managerId: nj.managerId,
+        pipStatus: nj.pipStatus ?? null,
+        pipFirstSeenAt: nj.pipFirstSeenAt ?? null,
       };
     });
 

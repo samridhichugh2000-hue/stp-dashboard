@@ -66,6 +66,8 @@ export async function GET() {
       nrPositiveMonth,
       roiStatus,
       claimedCorporates: 0,
+      pipStatus: nj.pipStatus ?? null,
+      pipFirstSeenAt: nj.pipFirstSeenAt ?? null,
     };
   });
 

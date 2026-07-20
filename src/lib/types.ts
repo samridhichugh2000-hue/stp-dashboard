@@ -182,6 +182,8 @@ export type PerformanceRow = {
   nrPositiveMonth: number | null;
   roiStatus: "Positive" | "Negative" | null;
   claimedCorporates: number;
+  pipStatus: string | null;
+  pipFirstSeenAt: string | null;
 };
 
 // RCB summary row (with NJ info joined)
@@ -194,6 +196,8 @@ export type RCBRow = {
   joinDate: string;
   claimedCorporates: number;
   nrFromCorporates: number;
+  pipStatus: string | null;
+  pipFirstSeenAt: string | null;
 };
 
 // Monthly NR grid
