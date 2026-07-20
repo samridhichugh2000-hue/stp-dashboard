@@ -56,6 +56,8 @@ export const newJoiners = sqliteTable("new_joiners", {
   stpMetricsDone:       integer("stp_metrics_done", { mode: "boolean" }).default(false),
   stpMetricsDoneAt:     text("stp_metrics_done_at"),
   stpMetricsDoneBy:     text("stp_metrics_done_by"),
+  pipStatus:            text("pip_status"),          // "PA" | "PIP" | null
+  pipFirstSeenAt:       text("pip_first_seen_at"),
 });
 
 // ── nrRecords ──────────────────────────────────────────────────────────────────

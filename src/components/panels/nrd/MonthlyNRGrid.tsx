@@ -3,6 +3,7 @@ import { Fragment, useRef, useEffect } from "react";
 import { clsx } from "clsx";
 import { fmtTenure } from "@/lib/formatTenure";
 import { NRInlineTrend } from "@/components/panels/nrd/NRInlineTrend";
+import { PipBadge } from "@/components/shared/PipBadge";
 interface NRRecord { id?: number; njId:string; month:number; year:number; nrValue:number; isPositive:boolean; }
 interface MonthlyNRGridProps {
   records: NRRecord[];
@@ -11,6 +12,8 @@ interface MonthlyNRGridProps {
   njNames: Record<string,string>;
   njJoinDates?: Record<string,string>;  // "YYYY-MM-DD"
   njTenures?: Record<string,number>;    // months
+  njPipStatus?: Record<string, string | null>;
+  njPipFirstSeenAt?: Record<string, string | null>;
   filter?: string;
   selectedNjId?: string;
   onSelect?: (njId: string) => void;
@@ -39,7 +42,7 @@ function isBeforeJoin(joinDateISO: string | undefined, colYear: number, colMonth
 }
 
 
-export function MonthlyNRGrid({ records, months, njIds, njNames, njJoinDates, njTenures, filter, selectedNjId, onSelect }: MonthlyNRGridProps) {
+export function MonthlyNRGrid({ records, months, njIds, njNames, njJoinDates, njTenures, njPipStatus, njPipFirstSeenAt, filter, selectedNjId, onSelect }: MonthlyNRGridProps) {
   const topBarRef   = useRef<HTMLDivElement>(null);
   const tableWrapRef = useRef<HTMLDivElement>(null);
   const mirrorRef   = useRef<HTMLDivElement>(null);
@@ -152,6 +155,7 @@ export function MonthlyNRGrid({ records, months, njIds, njNames, njJoinDates, nj
                         {njJoinDates?.[njId] && (
                           <p className="text-[10px] text-gray-400 mt-0.5">{fmtTenure(njJoinDates[njId])}</p>
                         )}
+                        <PipBadge pipStatus={njPipStatus?.[njId]} pipFirstSeenAt={njPipFirstSeenAt?.[njId]} className="mt-0.5" />
                       </div>
                     </button>
                   </td>

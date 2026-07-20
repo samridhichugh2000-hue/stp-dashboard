@@ -51,9 +51,11 @@ export default function NRDPage() {
   const filteredNjs = (managerFilter === "All" ? validNjs : validNjs.filter((n: NJ) => n.managerId === managerFilter))
     .sort((a: NJ, b: NJ) => b.joinDate.localeCompare(a.joinDate));
 
-  const njNames    = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.name]));
-  const njJoinDates = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.joinDate]));
-  const njTenures  = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.tenureMonths]));
+  const njNames        = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.name]));
+  const njJoinDates    = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.joinDate]));
+  const njTenures      = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.tenureMonths]));
+  const njPipStatus    = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.pipStatus ?? null]));
+  const njPipFirstSeenAt = Object.fromEntries(validNjs.map((n: NJ) => [String(n.id), n.pipFirstSeenAt ?? null]));
   const njIds      = filteredNjs.map((n: NJ) => String(n.id));
 
   const visibleAlerts = fluctuating.filter(f => !alertDismiss.has(f.njId));
@@ -206,6 +208,8 @@ export default function NRDPage() {
               njNames={njNames}
               njJoinDates={njJoinDates}
               njTenures={njTenures}
+              njPipStatus={njPipStatus}
+              njPipFirstSeenAt={njPipFirstSeenAt}
               filter={gridSearch}
               selectedNjId={selectedNjId ? String(selectedNjId) : ""}
               onSelect={(id) => setSelectedNjId(id ? Number(id) : "")}

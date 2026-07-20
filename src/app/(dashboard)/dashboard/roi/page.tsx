@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, Fragment } from "react";
 import { useSession } from "next-auth/react";
 import { fmtTenure } from "@/lib/formatTenure";
 import type { ROISummaryRow } from "@/lib/types";
+import { PipBadge } from "@/components/shared/PipBadge";
 import {
   PieChart, Pie, Cell, Legend, ResponsiveContainer, Sector,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LabelList,
@@ -281,10 +282,10 @@ export default function ROIPage() {
     if (words[0] && firstNameCount.get(words[0]) === 1) njNameSet.add(words[0]);
   }
 
-  const njMeta = new Map<string, { joinDate: string; tenureMonths: number; designation: string | null }>();
+  const njMeta = new Map<string, { joinDate: string; tenureMonths: number; designation: string | null; pipStatus: string | null; pipFirstSeenAt: string | null }>();
   for (const n of visibleNjs) {
     const base = normName(n.name);
-    const meta = { joinDate: n.joinDate, tenureMonths: n.tenureMonths, designation: n.designation ?? null };
+    const meta = { joinDate: n.joinDate, tenureMonths: n.tenureMonths, designation: n.designation ?? null, pipStatus: n.pipStatus ?? null, pipFirstSeenAt: n.pipFirstSeenAt ?? null };
     njMeta.set(base, meta);
     const words = base.split(/\s+/).filter(Boolean);
     if (words.length >= 3) njMeta.set(`${words[0]} ${words[words.length - 1]}`, meta);
@@ -593,6 +594,7 @@ export default function ROIPage() {
                                 {meta?.designation && (
                                   <p className="text-[10px] text-gray-400 mt-0.5">{meta.designation}</p>
                                 )}
+                                <PipBadge pipStatus={meta?.pipStatus} pipFirstSeenAt={meta?.pipFirstSeenAt} className="mt-0.5" />
                               </div>
                             </div>
                           </td>

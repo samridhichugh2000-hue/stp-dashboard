@@ -22,6 +22,7 @@ import {
   UserPlus, Calendar, RefreshCw,
 } from "lucide-react";
 import { fmtTenure } from "@/lib/formatTenure";
+import { PipBadge } from "@/components/shared/PipBadge";
 
 interface UpcomingJoining {
   id: number;
@@ -396,6 +397,53 @@ export default function OverviewPage() {
       {/* Pending milestone meetings */}
       <PendingMeetingsAlert />
 
+      {/* MOCK: Worry Index Summary */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-gray-100">
+          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-red-500 flex items-center justify-center shadow-sm flex-shrink-0">
+            <span className="text-white text-xs font-bold">⚠</span>
+          </div>
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700">Worry Index</h2>
+            <p className="text-[11px] text-gray-400">Risk signals across active STP NJs</p>
+          </div>
+          <span className="ml-auto text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full font-medium">Mock data</span>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-gray-100">
+          <div className="px-5 py-4 text-center">
+            <div className="text-2xl font-bold text-red-600">2</div>
+            <div className="text-[11px] text-gray-400 mt-1">🔴 High Risk</div>
+            <div className="text-[10px] text-gray-300 mt-0.5">Score ≥ 5</div>
+          </div>
+          <div className="px-5 py-4 text-center">
+            <div className="text-2xl font-bold text-amber-500">3</div>
+            <div className="text-[11px] text-gray-400 mt-1">🟡 Early Warning</div>
+            <div className="text-[10px] text-gray-300 mt-0.5">Score 1–4</div>
+          </div>
+          <div className="px-5 py-4 text-center">
+            <div className="text-2xl font-bold text-green-600">3</div>
+            <div className="text-[11px] text-gray-400 mt-1">🟢 On Track</div>
+            <div className="text-[10px] text-gray-300 mt-0.5">Score 0</div>
+          </div>
+        </div>
+        <div className="px-5 py-3 border-t border-gray-50 bg-gray-50/50">
+          <div className="space-y-2">
+            {[
+              { name: "Priya Nair", score: 8, label: "High Risk", color: "text-red-600", bg: "bg-red-50", border: "border-red-200", dot: "🔴" },
+              { name: "Rahul Kumar", score: 4, label: "Early Warning", color: "text-amber-600", bg: "bg-amber-50", border: "border-amber-200", dot: "🟡" },
+              { name: "Mohammed Ali", score: 6, label: "High Risk", color: "text-red-600", bg: "bg-red-50", border: "border-red-200", dot: "🔴" },
+            ].map(nj => (
+              <div key={nj.name} className="flex items-center justify-between">
+                <span className="text-xs text-gray-700">{nj.name}</span>
+                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${nj.bg} ${nj.color} ${nj.border}`}>
+                  {nj.dot} {nj.label} · {nj.score}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Upcoming Joinings */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-gray-100">
@@ -670,10 +718,13 @@ export default function OverviewPage() {
                               {initials(nj.name)}
                             </div>
                             {hasAlert && <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />}
-                            <button onClick={(e) => { e.stopPropagation(); setModalNJ(nj); }}
-                              className={`font-medium text-left hover:text-indigo-600 hover:underline transition-colors ${nj.isActive ? "text-gray-900" : "text-gray-400"}`}>
-                              {nj.name}
-                            </button>
+                            <div>
+                              <button onClick={(e) => { e.stopPropagation(); setModalNJ(nj); }}
+                                className={`font-medium text-left hover:text-indigo-600 hover:underline transition-colors ${nj.isActive ? "text-gray-900" : "text-gray-400"}`}>
+                                {nj.name}
+                              </button>
+                              <PipBadge pipStatus={nj.pipStatus} pipFirstSeenAt={nj.pipFirstSeenAt} className="block mt-0.5" />
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-gray-500 font-mono text-xs">{nj.empId ?? "—"}</td>

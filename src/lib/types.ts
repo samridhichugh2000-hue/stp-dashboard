@@ -32,6 +32,8 @@ export type NJ = {
   stpMetricsDoneAt:     string | null;
   stpMetricsDoneBy:     string | null;
   hasPositiveNR:        boolean;
+  pipStatus:            string | null;  // "PA" | "PIP" | null
+  pipFirstSeenAt:       string | null;
 };
 
 export type NRRecord = {

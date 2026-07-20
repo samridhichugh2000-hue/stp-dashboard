@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import type { NJ } from "@/lib/types";
+import { PipBadge } from "@/components/shared/PipBadge";
 import { clsx } from "clsx";
 import { fmtTenure } from "@/lib/formatTenure";
 import {
@@ -256,7 +257,7 @@ export default function LeadsPage() {
   const njMeta = new Map(
     (njs ?? []).map((n: NJ) => [
       normName(n.name),
-      { joinDate: n.joinDate, tenureMonths: n.tenureMonths, designation: n.designation },
+      { joinDate: n.joinDate, tenureMonths: n.tenureMonths, designation: n.designation, pipStatus: n.pipStatus ?? null, pipFirstSeenAt: n.pipFirstSeenAt ?? null },
     ])
   );
 
@@ -496,6 +497,7 @@ export default function LeadsPage() {
                           {getRowMeta(row.cce)?.designation && (
                             <p className="text-[10px] text-gray-400 mt-0.5">{getRowMeta(row.cce)!.designation}</p>
                           )}
+                          <PipBadge pipStatus={getRowMeta(row.cce)?.pipStatus} pipFirstSeenAt={getRowMeta(row.cce)?.pipFirstSeenAt} className="mt-0.5" />
                         </td>
                         <td className="py-2.5 px-3 text-xs text-gray-500 whitespace-nowrap">
                           {getRowMeta(row.cce)?.joinDate

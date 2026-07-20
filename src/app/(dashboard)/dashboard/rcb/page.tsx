@@ -6,6 +6,7 @@ import {
 } from "recharts";
 import { fmtTenure } from "@/lib/formatTenure";
 import type { NJ, RCBRow } from "@/lib/types";
+import { PipBadge } from "@/components/shared/PipBadge";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -333,6 +334,7 @@ export default function RCBPage() {
                           {row.designation && (
                             <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>
                           )}
+                          <PipBadge pipStatus={row.pipStatus} pipFirstSeenAt={row.pipFirstSeenAt} className="mt-0.5" />
                         </div>
                       </div>
                     </td>

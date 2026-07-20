@@ -7,6 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LabelList,
 } from "recharts";
 import { fmtTenure } from "@/lib/formatTenure";
+import { PipBadge } from "@/components/shared/PipBadge";
 import type { PerformanceRow, NJ, PerformanceAlert } from "@/lib/types";
 import { AlertCentre } from "@/components/panels/performance/AlertCentre";
 
@@ -492,6 +493,7 @@ export default function PerformancePage() {
                         <div>
                           <p className="text-xs font-semibold text-gray-800 group-hover:text-gray-900">{row.name}</p>
                           {row.designation && <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>}
+                          <PipBadge pipStatus={row.pipStatus} pipFirstSeenAt={row.pipFirstSeenAt} className="mt-0.5" />
                         </div>
                       </div>
                     </td>
