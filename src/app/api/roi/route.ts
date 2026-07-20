@@ -79,6 +79,8 @@ export async function GET(req: NextRequest) {
       joinDate: nj.joinDate,
       managerId: nj.managerId,
       totalNR: totals.has(nj.id) ? totals.get(nj.id)! : null,
+      pipStatus: nj.pipStatus ?? null,
+      pipFirstSeenAt: nj.pipFirstSeenAt ?? null,
     }));
 
   return NextResponse.json(rows);

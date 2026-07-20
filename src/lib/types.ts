@@ -168,6 +168,8 @@ export type ROISummaryRow = {
   joinDate: string;
   managerId: string;
   totalNR: number | null;
+  pipStatus: string | null;
+  pipFirstSeenAt: string | null;
 };
 
 // Performance query result shape
