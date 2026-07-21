@@ -54,7 +54,12 @@ function NRStatusBadge({ status, positiveMonth }: { status: NRROIStatus; positiv
 }
 
 function StatusBadge({ dev, joinDate }: { dev: boolean | null; joinDate: string }) {
-  if (dev === null) return <span className="text-gray-300 text-xs select-none">—</span>;
+  if (dev === null) return (
+    <div className="inline-flex flex-col items-center gap-0.5">
+      <Pill label="Pending Evaluation" palette={P_BLACK} />
+      <span className="text-[10px] text-gray-400">tenure &lt; 4 months</span>
+    </div>
+  );
   return (
     <div className="inline-flex flex-col items-center gap-0.5">
       <Pill label={dev ? "Developed" : "Not Developed"} palette={dev ? P_GREEN : P_RED} />
