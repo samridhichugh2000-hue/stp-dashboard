@@ -625,21 +625,6 @@ function NJCard({
           </div>
         </div>
 
-        {/* MOCK: Worry Index pill */}
-        {(() => {
-          const mockScore = [0, 4, 8, 2, 6, 0, 4][nj.id % 7];
-          if (mockScore === 0) return null;
-          const isRed = mockScore >= 5;
-          return (
-            <div className={clsx(
-              "mt-2 inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full border",
-              isRed ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"
-            )}>
-              <span>{isRed ? "🔴" : "🟡"}</span>
-              Worry Index · {mockScore}
-            </div>
-          );
-        })()}
 
         {/* Progress bar */}
         <div className="mt-3">
@@ -1097,20 +1082,6 @@ function STPDrawer({
           </div>
         </div>
 
-        {/* MOCK: Worry Index in drawer header */}
-        {(() => {
-          const mockScore = [0, 4, 8, 2, 6, 0, 4][nj.id % 7];
-          if (mockScore === 0) return null;
-          const isRed = mockScore >= 5;
-          return (
-            <div className={clsx(
-              "mt-3 inline-flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full border",
-              isRed ? "bg-red-500/20 text-red-200 border-red-400/30" : "bg-amber-400/20 text-amber-200 border-amber-400/30"
-            )}>
-              {isRed ? "🔴 High Risk" : "🟡 Early Warning"} · Score {mockScore}
-            </div>
-          );
-        })()}
 
         {/* Quick stat chips */}
         <div className="flex items-center gap-2 mt-4 flex-wrap">
@@ -1238,59 +1209,6 @@ function STPDrawer({
           <DayWiseTaskTracker njId={nj.id} joinDate={nj.joinDate} />
           <AssessmentChecklist njId={nj.id} njName={nj.name} />
 
-          {/* MOCK: Worry Index breakdown */}
-          {(() => {
-            const mockScore = [0, 4, 8, 2, 6, 0, 4][nj.id % 7];
-            const params = [
-              { label: "DSR Miss",        count: mockScore >= 5 ? 3 : 1, max: 5 },
-              { label: "Huddle Miss",     count: mockScore >= 5 ? 1 : 1, max: 5 },
-              { label: "No SCs Raised",   count: mockScore >= 5 ? 0 : 0, max: 5 },
-              { label: "HR Incident",     count: 0, max: 5, soon: true },
-              { label: "Lead Audit (–ve)",count: 0, max: 5, soon: true },
-            ];
-            const isRed = mockScore >= 5;
-            const isAmber = mockScore >= 1 && mockScore < 5;
-            return (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className={clsx("w-6 h-6 rounded-md flex items-center justify-center text-xs", isRed ? "bg-red-100" : isAmber ? "bg-amber-100" : "bg-green-100")}>
-                      ⚠️
-                    </div>
-                    <span className="text-sm font-semibold text-gray-700">Worry Index</span>
-                  </div>
-                  {mockScore > 0 ? (
-                    <span className={clsx("text-xs font-bold px-2.5 py-0.5 rounded-full", isRed ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>
-                      {isRed ? "🔴 High Risk" : "🟡 Early Warning"} · {mockScore}
-                    </span>
-                  ) : (
-                    <span className="text-xs font-semibold bg-green-100 text-green-700 px-2.5 py-0.5 rounded-full">🟢 On Track · 0</span>
-                  )}
-                </div>
-                <div className="px-4 py-3 space-y-3">
-                  {params.map(p => (
-                    <div key={p.label} className="flex items-center gap-3">
-                      <span className="text-xs text-gray-500 w-36 flex-shrink-0">{p.label}</span>
-                      <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                        {!p.soon && p.count > 0 && (
-                          <div className={clsx("h-full rounded-full", isRed ? "bg-red-400" : "bg-amber-400")}
-                            style={{ width: `${Math.min(100, (p.count / p.max) * 100)}%` }} />
-                        )}
-                      </div>
-                      {p.soon
-                        ? <span className="text-[10px] text-gray-300 w-20 text-right">coming soon</span>
-                        : <span className="text-xs text-gray-500 w-20 text-right">{p.count} × 2 = {p.count * 2}</span>
-                      }
-                    </div>
-                  ))}
-                  <div className="border-t border-gray-100 pt-2 flex justify-between items-center">
-                    <span className="text-xs font-semibold text-gray-600">Total score</span>
-                    <span className={clsx("text-sm font-bold", isRed ? "text-red-600" : isAmber ? "text-amber-600" : "text-green-600")}>{mockScore}</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
 
           {/* Meeting History */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
