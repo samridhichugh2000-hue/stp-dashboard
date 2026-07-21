@@ -134,7 +134,14 @@ export default function PerformancePage() {
   const enriched = rows?.filter(row => validNJIds.size === 0 || validNJIds.has(row.id)).map(row => {
     // New algo: Developed = tenure ≥ 4mo + positive ROI + not under PA/PIP
     // Pending (null) = tenure < 4mo (too early to evaluate)
-    const onPaPip = row.pipStatus === "PA" || row.pipStatus === "PIP";
+    // Only treat PA/PIP as active if ToDate hasn't passed yet
+    const pipActive = (() => {
+      if (row.pipStatus !== "PA" && row.pipStatus !== "PIP") return false;
+      if (!row.pipToDate) return true; // no end date — assume active
+      const parsed = new Date(row.pipToDate); // handles "15 May 2026"
+      return !isNaN(parsed.getTime()) ? parsed >= new Date() : true;
+    })();
+    const onPaPip = pipActive;
     const dev = row.tenureMonths < 4
       ? null
       : (row.roiStatus === "Positive" && !onPaPip) ? true : false;
