@@ -8,7 +8,12 @@ interface PipBadgeProps {
 
 function daysSince(iso: string | null | undefined): number | null {
   if (!iso) return null;
-  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  const start = new Date(iso);
+  const now = new Date();
+  // Calendar days difference (ignoring time-of-day)
+  const startDay = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+  const nowDay   = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.floor((nowDay - startDay) / 86_400_000);
 }
 
 export function PipBadge({ pipStatus, pipFirstSeenAt, className = "" }: PipBadgeProps) {

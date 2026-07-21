@@ -65,10 +65,12 @@ function getSTPStatus(
 ): STPStatus {
   const njAlerts = alerts.filter((a) => a.njId === nj.id);
   const hasExit = njAlerts.some((a) => a.alertType === "EXIT");
+  const hasPIP  = njAlerts.some((a) => a.alertType === "PIP");
+  const hasPA   = njAlerts.some((a) => a.alertType === "PA");
 
   if (hasExit) return "Exited";
-  if (nj.pipStatus === "PIP") return "On PIP";
-  if (nj.pipStatus === "PA")  return "On PA";
+  if (hasPIP)  return "On PIP";
+  if (hasPA)   return "On PA";
   if (wds <= 14) return "Phase 1 — Training";
   if (wds <= 18) return "Phase 2 — Extended";
   return nj.hasPositiveNR ? "Developed" : "Not Developed";
@@ -223,9 +225,7 @@ export default function STPTrackerPage() {
   const phase1Count = stpNJs.filter((n) => n.status === "Phase 1 — Training").length;
   const phase2Count = stpNJs.filter((n) => n.status === "Phase 2 — Extended").length;
 
-  const wipCount   = stpNJs.filter((n) => n.stpWipMarked).length;
-  const pipCount   = stpNJs.filter((n) => n.status === "On PIP").length;
-  const paCount    = stpNJs.filter((n) => n.status === "On PA").length;
+  const wipCount = stpNJs.filter((n) => n.stpWipMarked).length;
 
   return (
     <div className="flex flex-col gap-6 p-6 min-h-screen bg-slate-50">
@@ -254,7 +254,7 @@ export default function STPTrackerPage() {
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+        <div className="grid grid-cols-2 gap-3 mt-5">
           <div className="bg-white/10 backdrop-blur-sm rounded-xl px-4 py-3 border border-white/15">
             <div className="flex items-center gap-2 mb-1">
               <Users size={13} className="text-purple-200" />
@@ -268,18 +268,6 @@ export default function STPTrackerPage() {
               <span className="text-yellow-200 text-[11px] font-semibold uppercase tracking-wide">WIP Flagged</span>
             </div>
             <div className="text-2xl font-bold">{wipCount}</div>
-          </div>
-          <div className="bg-orange-500/20 backdrop-blur-sm rounded-xl px-4 py-3 border border-orange-300/30">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-orange-200 text-[11px] font-semibold uppercase tracking-wide">On PA</span>
-            </div>
-            <div className="text-2xl font-bold">{paCount}</div>
-          </div>
-          <div className="bg-red-500/20 backdrop-blur-sm rounded-xl px-4 py-3 border border-red-300/30">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-red-200 text-[11px] font-semibold uppercase tracking-wide">On PIP</span>
-            </div>
-            <div className="text-2xl font-bold">{pipCount}</div>
           </div>
         </div>
       </div>
@@ -626,14 +614,10 @@ function NJCard({
         {/* Status + manager row */}
         <div className="mt-3 flex items-center justify-between">
           <span className={clsx(
-            "text-[10px] font-semibold px-2 py-0.5 rounded-md border inline-flex items-center gap-1",
+            "text-[10px] font-semibold px-2 py-0.5 rounded-md border",
             STATUS_STYLE[nj.status]
           )}>
             {nj.status}
-            {(nj.status === "On PA" || nj.status === "On PIP") && nj.pipFirstSeenAt && (() => {
-              const days = Math.floor((Date.now() - new Date(nj.pipFirstSeenAt).getTime()) / 86_400_000);
-              return <span className="font-normal opacity-70">{days}d</span>;
-            })()}
           </span>
           <div className="flex items-center gap-1 text-[11px] text-gray-400">
             <User size={10} className="flex-shrink-0" />
@@ -825,14 +809,10 @@ function NJListView({
               {/* Phase / Day */}
               <div>
                 <span className={clsx(
-                  "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md border mb-1",
+                  "inline-block text-[10px] font-semibold px-2 py-0.5 rounded-md border mb-1",
                   STATUS_STYLE[nj.status]
                 )}>
                   {nj.status.replace(" — ", " ")}
-                  {(nj.status === "On PA" || nj.status === "On PIP") && nj.pipFirstSeenAt && (() => {
-                    const days = Math.floor((Date.now() - new Date(nj.pipFirstSeenAt).getTime()) / 86_400_000);
-                    return <span className="font-normal opacity-70">{days}d</span>;
-                  })()}
                 </span>
                 <div className="text-xs font-bold text-gray-700">Day {nj.wds} <span className="text-gray-400 font-normal">/ 18</span></div>
               </div>
