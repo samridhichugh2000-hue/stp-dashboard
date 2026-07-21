@@ -58,6 +58,8 @@ export const newJoiners = sqliteTable("new_joiners", {
   stpMetricsDoneBy:     text("stp_metrics_done_by"),
   pipStatus:            text("pip_status"),          // "PA" | "PIP" | null
   pipFirstSeenAt:       text("pip_first_seen_at"),
+  pipFromDate:          text("pip_from_date"),        // e.g. "8 Jul 2026"
+  pipToDate:            text("pip_to_date"),          // e.g. "31 Jul 2026"
 });
 
 // ── nrRecords ──────────────────────────────────────────────────────────────────

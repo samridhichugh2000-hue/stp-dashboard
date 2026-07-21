@@ -34,6 +34,8 @@ export type NJ = {
   hasPositiveNR:        boolean;
   pipStatus:            string | null;  // "PA" | "PIP" | null
   pipFirstSeenAt:       string | null;
+  pipFromDate:          string | null;  // e.g. "8 Jul 2026"
+  pipToDate:            string | null;  // e.g. "31 Jul 2026"
 };
 
 export type NRRecord = {
