@@ -127,10 +127,12 @@ export default function PerformancePage() {
   // Only keep rows whose NJ ID exists in the filtered njs list (removes garbage records)
   const validNJIds = new Set((njs ?? []).map(n => n.id));
   const enriched = rows?.filter(row => validNJIds.size === 0 || validNJIds.has(row.id)).map(row => {
-    // Use DB-stored category as source of truth (same as overview page)
-    const dev = row.category === "Developed" ? true
-              : row.category === "Uncategorised" ? null
-              : false;
+    // New algo: Developed = tenure ≥ 4mo + positive ROI + not under PA/PIP
+    // Pending (null) = tenure < 4mo (too early to evaluate)
+    const onPaPip = row.pipStatus === "PA" || row.pipStatus === "PIP";
+    const dev = row.tenureMonths < 4
+      ? null
+      : (row.roiStatus === "Positive" && !onPaPip) ? true : false;
     return {
       ...row,
       dev,
@@ -154,10 +156,10 @@ export default function PerformancePage() {
   const pipCount    = enriched?.filter(r => r.suggestedAction === "PA/PIP Suggested").length ?? 0;
 
   const statCards = [
-    { label: "Developed",         value: devCount,    desc: "Both NR & ROI positive",   bg: "from-indigo-400 to-violet-500" },
-    { label: "Not Developed",     value: notDevCount, desc: "NR or ROI negative",        bg: "from-pink-400 to-rose-500" },
-    { label: "Under Observation", value: underObs,    desc: "Negative, under 4 months",  bg: "from-purple-400 to-indigo-500" },
-    { label: "PA/PIP Suggested",  value: pipCount,    desc: "Negative, 4+ months",       bg: "from-rose-500 to-red-600" },
+    { label: "Developed",         value: devCount,    desc: "4mo+, positive ROI, no PA/PIP", bg: "from-indigo-400 to-violet-500" },
+    { label: "Not Developed",     value: notDevCount, desc: "4mo+, negative ROI or on PA/PIP", bg: "from-pink-400 to-rose-500" },
+    { label: "Under Observation", value: underObs,    desc: "Under 4 months tenure",      bg: "from-purple-400 to-indigo-500" },
+    { label: "PA/PIP Suggested",  value: pipCount,    desc: "Not developed, 4mo+",        bg: "from-rose-500 to-red-600" },
   ];
 
   // ── Chart data — all charts use `filtered` so they react to manager filter ─
@@ -493,7 +495,7 @@ export default function PerformancePage() {
                         <div>
                           <p className="text-xs font-semibold text-gray-800 group-hover:text-gray-900">{row.name}</p>
                           {row.designation && <p className="text-[10px] text-gray-400 mt-0.5">{row.designation}</p>}
-                          <PipBadge pipStatus={row.pipStatus} pipFirstSeenAt={row.pipFirstSeenAt} className="mt-0.5" />
+                          <PipBadge pipStatus={row.pipStatus} pipFromDate={row.pipFromDate} pipToDate={row.pipToDate} className="mt-0.5" />
                         </div>
                       </div>
                     </td>

@@ -68,6 +68,8 @@ export async function GET() {
       claimedCorporates: 0,
       pipStatus: nj.pipStatus ?? null,
       pipFirstSeenAt: nj.pipFirstSeenAt ?? null,
+      pipFromDate: nj.pipFromDate ?? null,
+      pipToDate: nj.pipToDate ?? null,
     };
   });
 

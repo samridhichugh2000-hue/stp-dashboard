@@ -188,6 +188,8 @@ export type PerformanceRow = {
   claimedCorporates: number;
   pipStatus: string | null;
   pipFirstSeenAt: string | null;
+  pipFromDate: string | null;
+  pipToDate: string | null;
 };
 
 // RCB summary row (with NJ info joined)
