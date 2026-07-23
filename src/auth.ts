@@ -31,10 +31,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       authorize: async (credentials) => {
         if (!credentials?.email || !credentials?.password) return null;
+        const emailNorm = (credentials.email as string).toLowerCase().trim();
         const user = await db
           .select()
           .from(users)
-          .where(eq(users.email, credentials.email as string))
+          .where(eq(users.email, emailNorm))
           .get();
         if (!user || !user.passwordHash) return null;
         const valid = await bcrypt.compare(credentials.password as string, user.passwordHash);
