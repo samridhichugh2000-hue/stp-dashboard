@@ -23,8 +23,8 @@ const C_GREEN = "#86efac";   // green-300
 const C_RED   = "#fca5a5";   // red-300
 
 
-function computeAction(dev: boolean | null, tenure: number): string | null {
-  if (dev === null) return null;
+function computeAction(dev: boolean | null, tenure: number): string {
+  if (dev === null) return "Under Observation";
   if (dev) return "On Track";
   return tenure >= 4 ? "PA/PIP Suggested" : "Under Observation";
 }
